@@ -7,6 +7,34 @@
 const KEY = 'byun.v1';
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MES3 = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const BANKS = [
+  // [chave, nome, cor, rendimento sugerido da conta/caixinha]
+  ['nubank', 'Nubank', '#820ad1', { rateType: 'cdi', rate: '100', info: 'Caixinhas do Nubank rendem em torno de 100% do CDI' }],
+  ['mercadopago', 'Mercado Pago', '#00a6e0', { rateType: 'cdi', rate: '100', info: 'Conta remunerada do Mercado Pago rende em torno de 100% do CDI' }],
+  ['inter', 'Inter', '#ff7a00', { rateType: 'cdi', rate: '100', info: 'Porquinho/CDB liquidez diária do Inter, em torno de 100% do CDI' }],
+  ['c6', 'C6 Bank', '#242424', { rateType: 'cdi', rate: '100', info: 'CDB do C6, em torno de 100% do CDI' }],
+  ['picpay', 'PicPay', '#11c76f', { rateType: 'cdi', rate: '102', info: 'Cofrinhos do PicPay, em torno de 102% do CDI' }],
+  ['pagbank', 'PagBank', '#1bb99a', { rateType: 'cdi', rate: '100', info: 'Conta do PagBank, em torno de 100% do CDI' }],
+  ['santander', 'Santander', '#e30613', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
+  ['itau', 'Itaú', '#ec7000', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
+  ['bradesco', 'Bradesco', '#cc092f', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
+  ['bb', 'Banco do Brasil', '#2a5bd7', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
+  ['caixa', 'Caixa', '#005ca9', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
+  ['btg', 'BTG Pactual', '#0b2341', { rateType: 'cdi', rate: '100', info: 'CDB liquidez diária, em torno de 100% do CDI' }],
+  ['xp', 'XP', '#111111', { rateType: 'cdi', rate: '100', info: 'CDB liquidez diária, em torno de 100% do CDI' }],
+  ['neon', 'Neon', '#0bb5c4', { rateType: 'cdi', rate: '100', info: 'Em torno de 100% do CDI' }],
+  ['sicoob', 'Sicoob', '#00ae9d', { rateType: 'cdi', rate: '100', info: 'Em torno de 100% do CDI' }],
+  ['sicredi', 'Sicredi', '#3fa110', { rateType: 'cdi', rate: '100', info: 'Em torno de 100% do CDI' }],
+  ['outro', 'Outro banco', '#6b6b6b', { rateType: 'cdi', rate: '100', info: 'Sem sugestão: confira no app do banco' }]
+];
+const bankOf = k => BANKS.find(b => b[0] === k) || BANKS[BANKS.length - 1];
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+function guessBank(name) { const n = norm(name).replace(/\s/g, ''); const b = BANKS.find(([k, nm]) => k !== 'outro' && (n.includes(k) || n.includes(norm(nm).replace(/\s/g, '')))); return b ? b[0] : 'outro'; }
+function sortAccounts() {
+  const idx = k => BANKS.findIndex(b => b[0] === k);
+  S.accounts.forEach(a => { if (!a.bank) a.bank = guessBank(a.name); });
+  S.accounts.sort((a, b) => idx(a.bank) - idx(b.bank) || (a.type === 'credito') - (b.type === 'credito') || a.name.localeCompare(b.name));
+}
 const ACC_COLORS = ['#0b0b0b','#1f5a3a','#00a6e0','#820ad1','#5b0896','#e30613','#ff7a00','#2a78d6','#c9a227','#6b6b6b'];
 
 /* ---------- utilidades ---------- */
@@ -80,11 +108,11 @@ function defaultState() {
   const accs = [
     ['Mercado Pago', 'conta', '#00a6e0'], ['Nubank', 'conta', '#820ad1'],
     ['Cartão Nubank', 'credito', '#5b0896'], ['Santander', 'conta', '#e30613']
-  ].map(a => ({ id: uid(), name: a[0], type: a[1], color: a[2], limit: a[1] === 'credito' ? 1500 : 0, closing: a[1] === 'credito' ? 3 : 0, due: a[1] === 'credito' ? 10 : 0 }));
+  ].map(a => ({ id: uid(), name: a[0], type: a[1], color: a[2], bank: guessBank(a[0]), limit: a[1] === 'credito' ? 1500 : 0, closing: a[1] === 'credito' ? 3 : 0, due: a[1] === 'credito' ? 10 : 0 }));
   return {
     v: 1, onboarded: false, name: '', theme: 'light', follow: true, sass: true, housingRef: 30,
     categories: cats, accounts: accs, housingCat: cats[5].id, defaultAcc: accs[0].id,
-    tx: [], fixed: [], fixedPaid: {}, extras: [], lastAdded: null
+    tx: [], fixed: [], fixedPaid: {}, extras: [], lastAdded: null, boxes: [], moves: [], cdi: 13.65
   };
 }
 /* ---------- nuvem (Supabase) ---------- */
@@ -98,7 +126,13 @@ if (CLOUD) {
 }
 const localKey = () => (CLOUD && user) ? `${KEY}.${user.id}` : KEY;
 function readKey(k) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
-function load() { const d = defaultState(); const r = readKey(localKey()); return r ? Object.assign(d, r) : d; }
+function migrate(s) {
+  if (!s.motion) s.motion = s.follow === false ? 'still' : 'follow';
+  (s.accounts || []).forEach(a => { if (!a.bank) a.bank = guessBank(a.name); a.closing = Math.min(31, Math.max(0, +a.closing || 0)); a.due = Math.min(31, Math.max(0, +a.due || 0)); });
+  s.boxes = s.boxes || []; s.moves = s.moves || []; if (!s.cdi) s.cdi = 13.65;
+  return s;
+}
+function load() { const d = defaultState(); const r = readKey(localKey()); return migrate(r ? Object.assign(d, r) : d); }
 let S = CLOUD ? defaultState() : load();
 function writeLocal() { try { localStorage.setItem(localKey(), JSON.stringify(S)); } catch (e) { toast('Não consegui salvar neste navegador'); } }
 function save() {
@@ -129,7 +163,7 @@ async function pull() {
     // conta nova: se tinha dados usados sem login neste aparelho, leva pra conta
     if (!S.onboarded) { const legacy = readKey(KEY); if (legacy && legacy.onboarded) { S = Object.assign(defaultState(), legacy); S._savedAt = Date.now(); writeLocal(); toast('Trouxe seus dados deste aparelho pra conta'); } }
     if (S.onboarded) await push(); else setSync('ok');
-  } else if (rAt > lAt) { S = Object.assign(defaultState(), remote); writeLocal(); setSync('ok'); }
+  } else if (rAt > lAt) { S = migrate(Object.assign(defaultState(), remote)); sortedOnce = false; writeLocal(); setSync('ok'); }
   else if (lAt > rAt) await push();
   else setSync('ok');
   if (!$('.sheet')) render();
@@ -143,14 +177,14 @@ async function enter(u) {
   try { const r = await sb.rpc('is_admin'); isAdmin = !!r.data; } catch (e) { isAdmin = false; }
   if (prof.must_change) { ui.auth = 'newpass'; ui.forced = true; render(); return; }
   if (isAdmin) { loadUsers(); render(); return; }
-  S = load(); if (!S.name && prof.display_name) S.name = prof.display_name;
+  S = load(); sortedOnce = false; if (!S.name && prof.display_name) S.name = prof.display_name;
   render(); await pull();
 }
 async function boot() {
   if (!CLOUD) { render(); return; }
   ui.auth = 'loading'; render();
   sb.auth.onAuthStateChange((ev) => {
-    if (ev === 'SIGNED_OUT') { user = null; prof = null; isAdmin = false; S = defaultState(); ui.auth = 'login'; ui.view = 'home'; ui.ob = 0; ui.users = ui.pending = null; ui.month = curKey(); render(); }
+    if (ev === 'SIGNED_OUT') { sortedOnce = false; user = null; prof = null; isAdmin = false; S = defaultState(); ui.auth = 'login'; ui.view = 'home'; ui.ob = 0; ui.users = ui.pending = null; ui.month = curKey(); render(); }
   });
   let session = null;
   try { session = (await sb.auth.getSession()).data.session; } catch (e) { }
@@ -166,6 +200,47 @@ const cat = id => S.categories.find(c => c.id === id);
 const acc = id => S.accounts.find(a => a.id === id);
 const catColor = c => c ? `var(--s${(c.color % 8) + 1})` : 'var(--muted)';
 const isCredit = a => a && a.type === 'credito';
+
+/* ---------- dias úteis (feriados nacionais) ---------- */
+const isoD = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function easter(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return new Date(y, mo - 1, da); }
+const HOL = {};
+function holidays(y) {
+  if (HOL[y]) return HOL[y];
+  const s = new Set(['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'].map(x => `${y}-${x}`));
+  const e = easter(y); [-48, -47, -2, 60].forEach(o => { const d = new Date(e); d.setDate(d.getDate() + o); s.add(isoD(d)); }); // carnaval, sexta santa, corpus christi
+  return HOL[y] = s;
+}
+function isBizDay(d, sat) { const w = d.getDay(); if (w === 0 || (w === 6 && !sat)) return false; return !holidays(d.getFullYear()).has(isoD(d)); }
+const RULES = [['util5', '5º dia útil'], ['utilUltimo', 'Último dia útil'], ['dia', 'Dia fixo']];
+function payDate(f, m) {
+  const [y, mo] = m.split('-').map(Number), D = dim(m);
+  if (f.rule === 'util5') { let n = 0; for (let d = 1; d <= D; d++) { const dt = new Date(y, mo - 1, d); if (isBizDay(dt, f.sat !== false) && ++n === 5) return dt; } }
+  if (f.rule === 'utilUltimo') { for (let d = D; d >= 1; d--) { const dt = new Date(y, mo - 1, d); if (isBizDay(dt, false)) return dt; } }
+  return new Date(y, mo - 1, Math.min(+f.day || 1, D));
+}
+const ruleLabel = f => f.rule === 'util5' ? '5º dia útil' : f.rule === 'utilUltimo' ? 'último dia útil' : `todo dia ${pad(f.day || 1)}`;
+const shortDate = d => d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '');
+
+/* ---------- cofrinho ---------- */
+const box = id => (S.boxes || []).find(b => b.id === id);
+const moveVal = m => m.type === 'ret' ? -m.amount : m.amount;
+function boxBal(b, upTo = '9999-12-31') { return sum((S.moves || []).filter(m => m.boxId === b.id && m.date <= upTo), moveVal); }
+function monthlyRate(b) {
+  const r = parseFloat(String(b.rate ?? '').replace(',', '.')) || 0;
+  if (b.rateType === 'cdi') return Math.pow(1 + (+S.cdi || 0) * r / 10000, 1 / 12) - 1;
+  if (b.rateType === 'ano') return Math.pow(1 + r / 100, 1 / 12) - 1;
+  if (b.rateType === 'mes') return r / 100;
+  return 0;
+}
+const rateLabel = b => b.rateType === 'cdi' ? `${b.rate || 100}% do CDI` : b.rateType === 'ano' ? `${b.rate}% ao ano` : b.rateType === 'mes' ? `${b.rate}% ao mês` : 'não rende';
+function boxesInfo(m = ui.month) {
+  const end = `${m}-31`, before = `${addMonths(m, -1)}-31`;
+  const mv = (S.moves || []).filter(x => x.date.slice(0, 7) === m);
+  const dep = sum(mv.filter(x => x.type === 'dep')), ret = sum(mv.filter(x => x.type === 'ret')), rend = sum(mv.filter(x => x.type === 'rend'));
+  const list = (S.boxes || []).map(b => ({ b, bal: boxBal(b, end), est: Math.max(0, boxBal(b, before) || boxBal(b, end)) * monthlyRate(b) }));
+  return { list, total: sum(list, x => x.bal), est: sum(list, x => x.est), dep, ret, rend };
+}
 
 /* ---------- cálculos do mês ---------- */
 function extrasFor(m) { return S.extras.filter(e => e.recurring ? (!e.since || e.since <= m) : e.month === m); }
@@ -199,10 +274,12 @@ function info(m = ui.month) {
   if (other) byCat.push({ c: { id: '_o', name: 'Outros', icon: '📦', limit: 0, color: 7 }, v: other });
   const overCats = byCat.filter(x => x.c.limit > 0 && x.v > x.c.limit);
   const entra = fixIn + receita + exIn;
-  const sobra = entra - fixOut - gasto - exOut - exSave;
+  const BX = boxesInfo(m), guard = BX.dep - BX.ret;
+  const incomes = S.fixed.filter(f => f.kind === 'entra' && (!f.since || f.since <= m)).map(f => ({ f, date: payDate(f, m) })).sort((a, b) => a.date - b.date);
+  const sobra = entra - fixOut - gasto - exOut - exSave - guard;
   const diario = daysLeft > 0 ? Math.max(0, pode) / daysLeft : 0;
   const projecao = day > 0 ? gasto / day * D : 0;
-  return { m, tx, gastos, receitas, gasto, receita, limit, fixIn, fixOut, fixOutList, paid, exIn, exOut, exSave, D, isCur, isPast, day, daysLeft, pode, expected, byCat, overCats, entra, sobra, diario, projecao };
+  return { m, tx, gastos, receitas, gasto, receita, limit, fixIn, fixOut, fixOutList, paid, exIn, exOut, exSave, D, isCur, isPast, day, daysLeft, pode, expected, byCat, overCats, entra, sobra, diario, projecao, BX, guard, incomes };
 }
 
 /* ---------- Byun: humor e falas ---------- */
@@ -221,7 +298,7 @@ function mood(N) {
 }
 const FALAS = {
   start: ['Mês novo, limite cheio: {limite}. Respira antes de abrir o iFood.', 'Página em branco. Bora não estragar logo de cara?', '{diario} por dia. Isso é um limite, não uma meta.'],
-  happy: ['Tô orgulhoso. Não acostuma.', 'Sobrou {pode}. Eu tô de olho, viu?', '{diario} por dia. Isso é um limite, não uma meta.', 'Gastando abaixo do ritmo. Quem é você e o que fez com a {nome}?'],
+  happy: ['Guardou {guardou} este mês. Tô orgulhoso. Não acostuma.', 'Tô orgulhoso. Não acostuma.', 'Sobrou {pode}. Eu tô de olho, viu?', '{diario} por dia. Isso é um limite, não uma meta.', 'Gastando abaixo do ritmo. Quem é você e o que fez com a {nome}?'],
   normal: ['No ritmo. Continua assim que eu continuo calmo.', '{pode} pra {dias} dias. Faz a conta comigo.', 'Dá pra gastar {diario} por dia sem eu reclamar.'],
   worried: ['Opa, acima do ritmo. Hoje é dia de comer em casa.', 'Já foram {gasto}. O mês ainda não acabou, sabia?', 'Nesse ritmo o mês fecha em {projecao}. Só comentando.'],
   surprised: ['{ultimo}?! De uma vez só?', 'Eita. {ultimo}. Foi necessário mesmo?', 'Ainda tô processando esse {ultimo}.'],
@@ -246,14 +323,15 @@ function fala(N, md) {
   const vars = {
     limite: fmt0(N.limit), pode: fmt(N.pode), dias: N.daysLeft, diario: fmt(N.diario), gasto: fmt(N.gasto),
     projecao: fmt0(N.projecao), ultimo: fmt0(S.lastAdded?.amount || 0), categoria: over ? over.c.name.split(' ')[0] : '',
-    excesso: fmt0(N.gasto - N.limit), sobra: fmt(N.sobra), nome: S.name || 'dona'
+    excesso: fmt0(N.gasto - N.limit), sobra: fmt(N.sobra), nome: S.name || 'dona', guardou: fmt0(N.BX.dep)
   };
-  return list[ui.msgI % list.length].replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+  const usable = list.filter(x => !x.includes('{guardou}') || N.BX.dep > 0);
+  return usable[ui.msgI % usable.length].replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
 }
 const DEFAULT_PET = { name: 'Byun', species: 'gato', body: '#0b0b0b', eyes: '#ffffff', accent: '#1f5a3a', blush: false };
-const SPECIES = [['gato', 'Gato'], ['onca', 'Onça'], ['coelho', 'Coelho'], ['urso', 'Urso'], ['golfinho', 'Golfinho'], ['tubarao', 'Tubarão']];
+const SPECIES = [['gato', 'Gato'], ['onca', 'Onça'], ['coelho', 'Coelho'], ['urso', 'Urso']];
 const BODY_COLORS = ['#0b0b0b', '#4a4a4a', '#ffffff', '#f2c6d8', '#e8a33d', '#8b5e3c', '#7c4dcc', '#2f6fdb', '#1f5a3a', '#c0392b'];
-const EYE_COLORS = ['#ffffff', '#3ddc84', '#ffd166', '#5ec8ff', '#ff8fab', '#b388ff', '#0b0b0b', '#6b3e1f'];
+const EYE_COLORS = ['#ffffff', '#ff3b3b', '#3ddc84', '#ffd166', '#5ec8ff', '#ff8fab', '#b388ff', '#0b0b0b', '#6b3e1f'];
 const ACCENTS = ['#1f5a3a', '#0b0b0b', '#6d3fc0', '#2a5bd7', '#c2457a', '#b5651d', '#0f766e', '#b91c1c'];
 let prof = null;
 function curPet() {
@@ -281,12 +359,6 @@ function byunSVG(md = 'normal', pet = curPet()) {
   } else if (p.species === 'urso') {
     ears = '<circle cx="48" cy="68" r="22"/><circle cx="152" cy="68" r="22"/>';
     extra = `<circle cx="48" cy="68" r="10" fill="${light}" opacity=".5"/><circle cx="152" cy="68" r="10" fill="${light}" opacity=".5"/><ellipse cx="100" cy="136" rx="22" ry="14" fill="${light}" opacity=".45"/>`;
-  } else if (p.species === 'golfinho') {
-    ears = '<path d="M84 60 C90 34 104 22 122 20 C112 32 110 46 114 60 Z"/>';
-    extra = `<ellipse cx="100" cy="146" rx="24" ry="13" fill="${light}" opacity=".55"/>`;
-  } else if (p.species === 'tubarao') {
-    ears = '<path d="M82 60 L106 10 C112 26 116 44 118 60 Z"/>';
-    extra = `<ellipse cx="100" cy="146" rx="46" ry="20" fill="${light}" opacity=".45"/>`;
   } else ears = '<path d="M38 100 C29 62 36 32 56 30 C72 29 86 46 96 66 L104 66 C114 46 128 29 144 30 C164 32 171 62 162 100 Z"/>';
   const S_ = `stroke="${eye}"`, F = `fill="${eye}"`;
   let e;
@@ -303,6 +375,7 @@ function byunSVG(md = 'normal', pet = curPet()) {
   const zz = md === 'sleepy' ? `<text class="zz" fill="${acc}" x="160" y="44">z</text><text class="zz b" fill="${acc}" x="172" y="28">z</text>` : '';
   return `<svg class="byun" viewBox="0 -12 200 184" role="img" aria-label="${esc(p.name || 'Byun')}"><g class="body" fill="${body}">${ears}<ellipse cx="100" cy="112" rx="75" ry="58"/></g>${extra}${blush}<g class="eyes">${e}</g>${zz}</svg>`;
 }
+const petCls = (p = curPet()) => (S.theme === 'dark' && lum(Object.assign({}, DEFAULT_PET, p).body) < .35) ? 'pet-light' : '';
 function applyAccent() {
   const a = curPet().accent, r = document.documentElement.style, dark = S.theme === 'dark';
   const ok = /^#[0-9a-f]{6}$/i.test(a) ? a : '#1f5a3a';
@@ -330,15 +403,54 @@ function renderPetEditor() {
   const { p, title } = petEdit, moods = ['normal', 'happy', 'surprised', 'angry', 'sad', 'sleepy'];
   const sw = (key, list) => `<div class="swatches">${[...new Set([...list, p[key]])].map(c => `<label><input type="radio" name="pe_${key}" data-a="peColor" data-k="${key}" data-v="${c}" ${p[key] === c ? 'checked' : ''}><span style="background:${c}"></span></label>`).join('')}<label class="custom-c" title="Outra cor"><input type="color" data-pk="${key}" value="${p[key]}" aria-label="Outra cor"></label></div>`;
   $('#petEd').innerHTML = sheetHead(title) + `
-    <div class="pet-prev" data-a="peMood">${byunSVG(moods[petEdit.mood % moods.length], p)}<span>toque pra ver outro humor</span></div>
+    <div class="pet-prev ${petCls(p)}" data-a="peMood">${byunSVG(moods[petEdit.mood % moods.length], p)}<span>toque pra ver outro humor</span></div>
     <label class="fld"><span>Nome do mascote</span><input id="peName" value="${esc(p.name)}" maxlength="16" placeholder="Byun"></label>
     <div class="flabel">Bichinho</div>
-    <div class="species">${SPECIES.map(([k, l]) => `<button class="${p.species === k ? 'on' : ''}" data-a="peSpecies" data-v="${k}"><i>${byunSVG('normal', Object.assign({}, p, { species: k }))}</i>${l}</button>`).join('')}</div>
+    <div class="species">${SPECIES.map(([k, l]) => `<button class="${p.species === k ? 'on' : ''}" data-a="peSpecies" data-v="${k}"><i class="${petCls(p)}">${byunSVG('normal', Object.assign({}, p, { species: k }))}</i>${l}</button>`).join('')}</div>
     <div class="flabel">Cor do corpo</div>${sw('body', BODY_COLORS)}
     <div class="flabel">Cor dos olhos</div>${sw('eyes', EYE_COLORS)}
     <div class="flabel">Cor do app</div>${sw('accent', ACCENTS)}
     <label class="switch"><div><div class="n">Bochechas rosadas</div></div><span class="tgl"><input type="checkbox" data-pt="blush" ${p.blush ? 'checked' : ''}><i></i></span></label>
     <button class="btn" data-a="peSave">Salvar</button>`;
+}
+
+/* ---------- ícone do app com o mascote de cada pessoa ---------- */
+const STATIC_ICON = 'icons/apple-touch-icon.png', STATIC_MANIFEST = 'manifest.webmanifest';
+function iconBg(p) { return lum(p.body) > .85 ? mixHex(p.accent || '#1f5a3a', '#ffffff', .82) : '#f6f6f3'; }
+function iconPNG(pet, size = 512, pad = .1) {
+  return new Promise(res => {
+    const p = Object.assign({}, DEFAULT_PET, pet);
+    const svg = byunSVG('normal', p).replace('<svg class="byun"', '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="368"');
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d');
+      x.fillStyle = iconBg(p); x.fillRect(0, 0, size, size);
+      // recorta só o bichinho (sem margem) e centraliza
+      const top = { gato: 28, onca: 42, coelho: -10, urso: 46 }[p.species] ?? 28;
+      const bx = 24, by = top, bw = 152, bh = 171 - top, k = 2;                 // caixa do desenho em unidades do viewBox
+      const box = size * (1 - 2 * pad), s = Math.min(box / bw, box / bh);
+      const dw = bw * s, dh = bh * s;
+      x.drawImage(img, bx * k, (by + 12) * k, bw * k, bh * k, (size - dw) / 2, (size - dh) / 2, dw, dh);
+      try { res(c.toDataURL('image/png')); } catch (e) { res(null); }
+    };
+    img.onerror = () => res(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  });
+}
+let iconKey = '';
+async function updateAppIcon(pet) {
+  try {
+    const touch = document.querySelector('link[rel=apple-touch-icon]'), man = document.querySelector('link[rel=manifest]');
+    if (!pet) { iconKey = ''; if (touch) touch.href = STATIC_ICON; if (man) man.href = STATIC_MANIFEST; return; }
+    const key = JSON.stringify(pet); if (key === iconKey) return; iconKey = key;
+    const [i180, i192, i512, m512] = await Promise.all([iconPNG(pet, 180), iconPNG(pet, 192), iconPNG(pet, 512), iconPNG(pet, 512, .2)]);
+    if (!i180) return;
+    if (touch) touch.href = i180;
+    const base = location.href.split('#')[0].split('?')[0];
+    const mf = { name: 'Byun', short_name: pet.name || 'Byun', lang: 'pt-BR', start_url: base, scope: base.replace(/[^/]*$/, ''), display: 'standalone', orientation: 'portrait', background_color: iconBg(pet), theme_color: '#ffffff',
+      icons: [{ src: i192, sizes: '192x192', type: 'image/png' }, { src: i512, sizes: '512x512', type: 'image/png' }, { src: m512, sizes: '512x512', type: 'image/png', purpose: 'maskable' }] };
+    if (man) man.href = URL.createObjectURL(new Blob([JSON.stringify(mf)], { type: 'application/manifest+json' }));
+  } catch (e) { }
 }
 
 /* ---------- moldura ---------- */
@@ -353,8 +465,11 @@ function nav() {
   return `<nav class="nav">${b('home', 'home', 'Início')}${b('tx', 'list', 'Transações')}<button class="plus" data-a="add" data-v="gasto" aria-label="Novo lançamento">${ic('plus')}</button>${b('charts', 'pie', 'Análises')}${b('plan', 'sliders', 'Planejar')}</nav>`;
 }
 
+let sortedOnce = false;
 function render() {
+  if (!sortedOnce && S.accounts) { sortAccounts(); sortedOnce = true; }
   document.documentElement.dataset.theme = S.theme; applyAccent();
+  if (!CLOUD || (user && !isAdmin)) updateAppIcon(curPet()); else updateAppIcon(null);
   const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = S.theme === 'dark' ? '#0a0b0a' : '#ffffff';
   const app = $('#app');
   if (CLOUD && (!user || ui.auth)) { app.innerHTML = authView(); return; }
@@ -377,34 +492,35 @@ function homeView() {
 
   const hero = `<section class="hero">
     <div class="bubble" data-a="poke">${esc(fala(N, md))}</div>
-    <div class="gauge">
+    <div class="gauge ${petCls()}">
       <svg class="arc ${N.pode < 0 ? 'over' : ''}" viewBox="0 0 240 240"><path class="trk" d="M46.46 193.54 A104 104 0 1 1 193.54 193.54" fill="none" stroke-width="11" stroke-linecap="round" pathLength="100"/><path class="val" d="M46.46 193.54 A104 104 0 1 1 193.54 193.54" fill="none" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="${N.pode < 0 ? 100 : (frac * 100).toFixed(2)} 200"/></svg>
-      <div class="byun-wrap" data-a="poke">${byunSVG(md)}</div>
+      <div class="byun-wrap ${S.motion === 'bounce' ? 'bounce' : ''}" data-a="poke">${byunSVG(md)}</div>
     </div>
     <div class="label">Pode gastar</div>
     <div class="big">${money(N.pode)}</div>
     <div class="sub">${sub}</div>${pill}
+    ${N.BX.list.length ? `<button class="box-pill" data-a="goBoxes">🐷 <b>${fmt0(N.BX.total)}</b> guardado <span>+${fmt(N.BX.est)}/mês</span></button>` : `<button class="box-pill" data-a="newBox">🐷 Criar meu cofrinho</button>`}
   </section>
   <div class="qa">
     <button data-a="add" data-v="gasto"><i>${ic('minus')}</i>Gasto</button>
     <button data-a="add" data-v="receita"><i>${ic('plus')}</i>Receita</button>
+    <button data-a="move" data-v="dep"><i>${ic('piggy')}</i>Guardar</button>
     <button data-a="go" data-v="plan"><i>${ic('repeat')}</i>Fixos</button>
-    <button data-a="go" data-v="plan"><i>${ic('gauge')}</i>Limites</button>
   </div>`;
 
   return topbar() + `<div class="home-grid">
-    <div class="col">${hero}${saldoCard(N)}${recentCard(N)}</div>
-    <div class="col">${billsCard(N)}${cardsCard()}</div>
-    <div class="col">${housingCard(N)}${extrasCard(N)}</div>
+    <div class="side">${hero}${saldoCard(N)}</div>
+    <div class="masonry">${boxCard(N)}${billsCard(N)}${cardsCard()}${recentCard(N)}${extrasCard(N)}</div>
   </div>`;
 }
 
 function saldoCard(N) {
-  const base = Math.max(N.entra, N.fixOut + N.gasto + N.exOut + N.exSave, 1);
+  const base = Math.max(N.entra, N.fixOut + N.gasto + N.exOut + N.exSave + Math.max(0, N.guard), 1);
   const parts = [
     ['Fixos', N.fixOut, 'var(--ink)'], ['Dia a dia', N.gasto, 'var(--s1)'],
-    ['Extras', N.exOut + N.exSave, 'var(--s4)'], ['Sobra', Math.max(0, N.sobra), 'var(--green2)']
+    ['Extras', N.exOut + N.exSave, 'var(--s4)'], ['Guardado', Math.max(0, N.guard), 'var(--s7)'], ['Sobra', Math.max(0, N.sobra), 'var(--green2)']
   ];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   const bar = parts.filter(p => p[1] > 0).map(p => `<i style="width:${p[1] / base * 100}%;background:${p[2]}" title="${p[0]}"></i>`).join('');
   const salPct = N.entra > 0 ? pct(N.sobra, N.entra) : 0;
   return `<section class="card">
@@ -417,8 +533,10 @@ function saldoCard(N) {
       <div><span class="dot" style="background:var(--ink)"></span>Fixos <b>-${fmt(N.fixOut)}</b></div>
       <div><span class="dot" style="background:var(--s1)"></span>Dia a dia <b>-${fmt(N.gasto)}</b></div>
       <div><span class="dot" style="background:var(--s4)"></span>Extras <b>-${fmt(N.exOut + N.exSave)}</b></div>
+      <div><span class="dot" style="background:var(--s7)"></span>Guardado <b>${N.guard > 0 ? '-' : ''}${fmt(Math.abs(N.guard))}</b></div>
     </div>
-    ${N.entra === 0 ? `<div class="empty" style="padding-bottom:0">Cadastre seu salário em <button class="link" data-a="go" data-v="plan">Planejar</button> pra ver a sobra real.</div>` : ''}
+    ${N.incomes.length ? `<div class="flabel" style="margin-top:16px">Rendas do mês</div>${N.incomes.map(({ f, date }) => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">💰</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${shortDate(date)} · ${ruleLabel(f)}</div></div><div class="v pos">${date <= today && N.isCur ? '✓ ' : ''}+${fmt(f.amount)}</div></div>`).join('')}`
+      : `<div class="empty" style="padding-bottom:0">Cadastre suas rendas em <button class="link" data-a="newIncome">Nova renda</button> pra ver a sobra real.</div>`}
   </section>`;
 }
 
@@ -477,22 +595,76 @@ function shade(hex) {
   return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
-function housingCard(N) {
-  const hc = cat(S.housingCat);
-  if (!hc) return '';
-  const v = sum(N.fixOutList.filter(f => f.catId === hc.id)) + (N.byCat.find(x => x.c.id === hc.id)?.v || 0);
-  const sal = N.fixIn + N.receita;
-  const p = sal > 0 ? v / sal * 100 : 0, ref = +S.housingRef || 30;
-  const items = N.fixOutList.filter(f => f.catId === hc.id);
-  return `<section class="card">
-    <div class="card-h"><span class="t">${ic('house')} ${esc(hc.name)}</span><button class="link" data-a="go" data-v="plan">Ajustar</button></div>
-    <div class="sub">Quanto você gasta pra morar</div>
-    <div class="saldo-big" style="font-size:28px">${money(v)}</div>
-    ${sal > 0 ? `<div style="font-size:12.5px;margin-top:4px"><b class="${p > ref ? 'neg' : 'pos'}">${p > ref ? '' : '✓ '}${Math.round(p)}% do que entra</b> <span class="muted">referência: até ${ref}%</span></div>
-    <div class="prog" style="margin:14px 0 4px"><i class="${p > ref ? 'over' : ''}" style="width:${Math.min(100, p / 60 * 100)}%"></i><span class="mark" style="left:${ref / 60 * 100}%"></span></div>
-    <div class="sub" style="display:flex;justify-content:space-between"><span>0%</span><span>60% do que entra</span></div>` : `<div class="sub">Cadastre o salário pra ver o peso no orçamento.</div>`}
-    ${items.length ? `<div class="flabel">O que entra na conta</div>${items.map(f => `<div class="row"><div class="ico">${esc(cat(f.catId)?.icon || '🏠')}</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">dia ${pad(f.day || 1)}</div></div><div class="v">${fmt(f.amount)}</div></div>`).join('')}` : ''}
+function boxCard(N) {
+  const BX = N.BX;
+  if (!BX.list.length) return `<section class="card">
+    <div class="card-h"><span class="t">${ic('piggy')} Cofrinho</span></div>
+    <div class="empty"><b>Quanto você tem guardado?</b>Crie uma caixinha pra acompanhar a reserva e ver quanto ela rende.</div>
+    <button class="btn" data-a="newBox">${ic('plus')} Criar caixinha</button></section>`;
+  return `<section class="card" id="cofrinho">
+    <div class="card-h"><span class="t">${ic('piggy')} Cofrinho</span><button class="link" data-a="newBox">Caixinha ${ic('plus')}</button></div>
+    <div class="sub">Dinheiro guardado</div>
+    <div class="saldo-big">${money(BX.total)}</div>
+    <div style="font-size:12.5px;margin-top:4px"><b class="pos">+${fmt(BX.est)}</b> <span class="muted">de rendimento estimado em ${monthName(N.m).toLowerCase()}</span></div>
+    ${BX.dep || BX.ret || BX.rend ? `<div class="sub" style="margin-top:2px">Este mês: guardou ${fmt(BX.dep)}${BX.ret ? ` · retirou ${fmt(BX.ret)}` : ''}${BX.rend ? ` · rendeu ${fmt(BX.rend)}` : ''}</div>` : ''}
+    <div style="margin-top:10px">${BX.list.map(({ b, bal, est }) => `<div class="row tap" data-a="openBox" data-v="${b.id}"><div class="ico">${esc(b.icon || '🐷')}</div><div class="l"><div class="n">${esc(b.name)}</div><div class="d">${acc(b.accId) ? esc(acc(b.accId).name) + ' · ' : ''}${rateLabel(b)}${est > 0 ? ` · ~${fmt(est)}/mês` : ''}</div>${b.goal > 0 ? `<div class="prog" style="height:5px;margin-top:6px"><i style="width:${Math.min(100, bal / b.goal * 100)}%;background:var(--s7)"></i></div><div class="d" style="margin-top:3px">${pct(bal, b.goal)}% da meta de ${fmt0(b.goal)}</div>` : ''}</div><div class="v">${fmt(bal)}</div></div>`).join('')}</div>
+    <div class="trio"><button class="btn ghost" data-a="move" data-v="dep">Guardar</button><button class="btn ghost" data-a="move" data-v="ret">Retirar</button><button class="btn ghost" data-a="move" data-v="rend">Rendeu</button></div>
   </section>`;
+}
+function boxForm(b) {
+  openForm({
+    title: b ? 'Editar caixinha' : 'Nova caixinha', saveLabel: b ? 'Salvar' : 'Criar caixinha',
+    values: b ? { ...b } : (() => { const ac = acc(S.defaultAcc) || S.accounts.find(x => !isCredit(x)); const s = bankOf(ac?.bank)[3]; return { icon: '🐷', rateType: s.rateType, rate: s.rate, accId: ac?.id }; })(),
+    fields: [
+      { key: 'name', label: 'Nome', req: true, max: 30, ph: 'Ex.: Reserva de emergência, Viagem' },
+      { key: 'icon', label: 'Emoji', max: 4, ph: '🐷' },
+      ...(b ? [] : [{ key: 'initial', label: 'Quanto já tem guardado nela?', type: 'money', hint: 'Entra como saldo inicial. Não conta como gasto do mês.' }]),
+      { key: 'accId', label: 'Onde está o dinheiro', type: 'select', options: accOpts(), hint: '<span id="bankSug"></span>' },
+      { key: 'rateType', label: 'Como rende', type: 'radios', options: [['cdi', '% do CDI'], ['ano', '% ao ano'], ['mes', '% ao mês'], ['nada', 'Não rende']], def: 'cdi' },
+      { key: 'rate', label: 'Taxa', ph: 'Ex.: 100', hint: `Para "% do CDI", 100 = rende igual ao CDI (hoje ${String(S.cdi).replace('.', ',')}% ao ano). Estimativa bruta, antes do IR.` },
+      { key: 'goal', label: 'Meta (opcional)', type: 'money' }
+    ],
+    onOpen: form => { const upd = (apply) => { const ac = acc(form.querySelector('[name=accId]').value); const s = bankOf(ac?.bank)[3]; $('#bankSug').textContent = ac ? `Sugestão para ${bankOf(ac.bank)[1]}: ${s.info}. Confira no app do banco.` : ''; if (apply) { form.querySelectorAll('[name=rateType]').forEach(r => r.checked = r.value === s.rateType); form.querySelector('[name=rate]').value = s.rate.replace('.', ','); } }; upd(false); form._upd = upd; },
+    onChange: (form, k) => { if (k === 'accId') form._upd(true); },
+    onSave: v => {
+      v.rate = String(v.rate || '').replace(',', '.');
+      if (b) { Object.assign(b, v); return; }
+      const nb = { id: uid(), name: v.name, icon: v.icon || '🐷', accId: v.accId, rateType: v.rateType, rate: v.rate, goal: v.goal };
+      S.boxes = S.boxes || []; S.moves = S.moves || []; S.boxes.push(nb);
+      if (v.initial > 0) S.moves.push({ id: uid(), boxId: nb.id, type: 'ini', amount: v.initial, date: todayISO(), note: 'Saldo inicial' });
+    },
+    onDelete: b ? () => { S.boxes = S.boxes.filter(x => x.id !== b.id); S.moves = S.moves.filter(m => m.boxId !== b.id); } : null
+  });
+}
+const MOVE_T = { dep: ['Guardar dinheiro', 'Guardado'], ret: ['Retirar dinheiro', 'Retirado'], rend: ['Registrar rendimento', 'Rendimento registrado'] };
+function moveForm(type, boxId) {
+  if (!(S.boxes || []).length) { boxForm(); return; }
+  openForm({
+    title: MOVE_T[type][0], saveLabel: MOVE_T[type][0].split(' ')[0],
+    values: { boxId: boxId || S.boxes[0].id, date: ui.month === curKey() ? todayISO() : ui.month + '-01' },
+    fields: [
+      { key: 'boxId', label: 'Caixinha', type: 'select', options: S.boxes.map(b => [b.id, `${b.icon || '🐷'} ${b.name}`]) },
+      { key: 'amount', label: 'Valor', type: 'money', req: true },
+      { key: 'date', label: 'Data', ph: 'AAAA-MM-DD', type: 'date' },
+      { key: 'note', label: 'Nota (opcional)', max: 60 }
+    ],
+    onSave: v => { S.moves.push({ id: uid(), boxId: v.boxId, type, amount: v.amount, date: /^\d{4}-\d{2}-\d{2}$/.test(v.date) ? v.date : todayISO(), note: v.note }); toast(MOVE_T[type][1]); }
+  });
+}
+function boxSheet(id) {
+  const b = box(id); if (!b) return;
+  const bal = boxBal(b), est = bal * monthlyRate(b);
+  const mv = S.moves.filter(m => m.boxId === id).sort((x, y) => y.date.localeCompare(x.date)).slice(0, 30);
+  const lab = { ini: 'Saldo inicial', dep: 'Guardou', ret: 'Retirou', rend: 'Rendimento' };
+  openSheet(sheetHead(`${esc(b.icon || '🐷')} ${esc(b.name)}`) + `
+    <div class="saldo-big">${money(bal)}</div>
+    <div class="sub">${acc(b.accId) ? esc(acc(b.accId).name) + ' · ' : ''}${rateLabel(b)} · rende ~${fmt(est)} por mês</div>
+    <div class="trio"><button class="btn ghost" data-a="move" data-v="dep" data-b="${id}">Guardar</button><button class="btn ghost" data-a="move" data-v="ret" data-b="${id}">Retirar</button><button class="btn ghost" data-a="move" data-v="rend" data-b="${id}">Rendeu</button></div>
+    <button class="btn ghost" data-a="fixBal" data-v="${id}">Atualizar com o saldo do banco</button>
+    <div class="flabel">Histórico</div>
+    ${mv.length ? mv.map(m => `<div class="row tap" data-a="delMove" data-v="${m.id}"><div class="l"><div class="n">${lab[m.type]}${m.note && m.type !== 'ini' ? ' · ' + esc(m.note) : ''}</div><div class="d">${dayLabel(m.date)}</div></div><div class="v ${m.type === 'ret' ? '' : 'pos'}">${m.type === 'ret' ? '-' : '+'}${fmt(Math.abs(m.amount))}</div></div>`).join('') : '<div class="empty">Sem movimentos.</div>'}
+    <div class="sub" style="margin-top:8px">Toque num movimento pra apagar.</div>
+    <button class="btn ghost" data-a="editBox" data-v="${id}">Editar caixinha</button>`);
 }
 
 function extrasCard(N) {
@@ -567,7 +739,8 @@ function chartsView() {
     months: (() => { const ks = [-5, -4, -3, -2, -1, 0].map(i => addMonths(ui.month, i)); const infos = ks.map(k => info(k)); return { labels: ks.map(k => MES3[+k.slice(5) - 1]), series: [
       { name: 'Entradas', color: 'var(--green2)', values: infos.map(x => x.entra) },
       { name: 'Saídas', color: 'var(--ink)', values: infos.map(x => x.fixOut + x.gasto + x.exOut + x.exSave) }
-    ], tipLabel: i => monthName(ks[i]) + ' ' + ks[i].slice(0, 4) }; })()
+    ], tipLabel: i => monthName(ks[i]) + ' ' + ks[i].slice(0, 4) }; })(),
+    boxes: (() => { const ks = [-5, -4, -3, -2, -1, 0].map(i => addMonths(ui.month, i)); return { labels: ks.map(k => MES3[+k.slice(5) - 1]), series: [{ name: 'Guardado', color: 'var(--s7)', values: ks.map(k => sum(S.boxes || [], b => boxBal(b, k + '-31'))) }], tipLabel: i => monthName(ks[i]) + ' ' + ks[i].slice(0, 4) }; })()
   };
   const catRows = N.byCat.filter(x => x.v > 0 || x.c.limit > 0).sort((a, b) => b.v - a.v);
   const maxCat = Math.max(1, ...catRows.map(x => Math.max(x.v, x.c.limit)));
@@ -581,11 +754,10 @@ function chartsView() {
       <div class="kpi"><div class="k">Projeção do mês</div><div class="v ${N.projecao > N.limit && N.limit ? 'neg' : ''}">${fmt0(N.projecao)}</div><div class="s">limite ${fmt0(N.limit)}</div></div>
       <div class="kpi"><div class="k">Maior gasto</div><div class="v">${biggest ? fmt0(biggest.amount) : 'R$ 0'}</div><div class="s">${biggest ? esc(biggest.note || cat(biggest.catId)?.name || '') : 'nada ainda'}</div></div>
     </div>
-    <div class="charts-grid">
-    <section class="card wide"><div class="card-h"><span class="t">${ic('trend')} Gasto acumulado x ritmo ideal</span></div>
+    <section class="card"><div class="card-h"><span class="t">${ic('trend')} Gasto acumulado x ritmo ideal</span></div>
       <div class="ch-legend"><span><i style="background:var(--green)"></i>Gasto acumulado</span><span><i class="dash"></i>Ritmo ideal</span></div>
       <div class="chart" data-chart="cum"></div></section>
-    <section class="card"><div class="card-h"><span class="t">${ic('calendar')} Gastos por dia</span></div>
+    <div class="masonry"><section class="card"><div class="card-h"><span class="t">${ic('calendar')} Gastos por dia</span></div>
       <div class="chart" data-chart="daily"></div>
       ${N.gasto ? `<div class="sub" style="margin-top:10px">Dia mais caro: <b class="ink2">${maxDay + 1}/${N.m.slice(5)}</b> (${fmt(daily[maxDay])}) · você gasta mais na <b class="ink2">${WD[wdMax]}</b></div>` : ''}</section>
     <section class="card"><div class="card-h"><span class="t">${ic('pie')} Por categoria</span><button class="link" data-a="go" data-v="plan">Limites</button></div>
@@ -594,11 +766,14 @@ function chartsView() {
         <div class="sm"><span>${pct(x.v, N.gasto)}% do mês</span><span class="${over ? 'neg' : ''}">${x.c.limit > 0 ? (over ? `estourou ${fmt(x.v - x.c.limit)}` : `limite ${fmt0(x.c.limit)}`) : 'sem limite'}</span></div></div>`; }).join('')
       : '<div class="empty">Sem gastos ainda.</div>'}</section>
     <section class="card"><div class="card-h"><span class="t">${ic('card')} Por conta e cartão</span></div>
-      ${accRows.length ? accRows.map(x => `<div class="hbar"><div class="top-l"><span><span class="dot" style="background:${x.a.color}"></span><em>${esc(x.a.name)}</em></span><b>${fmt(x.v)}</b></div><div class="prog"><i style="width:${x.v / maxAcc * 100}%;background:${x.a.color}"></i></div><div class="sm"><span>${pct(x.v, N.gasto)}% do mês</span><span>${isCredit(x.a) ? 'crédito' : 'débito / pix'}</span></div></div>`).join('') : '<div class="empty">Sem gastos ainda.</div>'}</section>
-    <section class="card wide"><div class="card-h"><span class="t">${ic('repeat')} Últimos 6 meses</span></div>
+      ${'' /* contas */}${accRows.length ? accRows.map(x => `<div class="hbar"><div class="top-l"><span><span class="dot" style="background:${x.a.color}"></span><em>${esc(x.a.name)}</em></span><b>${fmt(x.v)}</b></div><div class="prog"><i style="width:${x.v / maxAcc * 100}%;background:${x.a.color}"></i></div><div class="sm"><span>${pct(x.v, N.gasto)}% do mês</span><span>${isCredit(x.a) ? 'crédito' : 'débito / pix'}</span></div></div>`).join('') : '<div class="empty">Sem gastos ainda.</div>'}</section>
+    <section class="card"><div class="card-h"><span class="t">${ic('piggy')} Dinheiro guardado</span></div>
+      <div class="ch-legend"><span><i style="background:var(--s7)"></i>Total no cofrinho</span></div>
+      ${(S.boxes || []).length ? '<div class="chart" data-chart="boxes"></div>' : '<div class="empty">Crie uma caixinha no Início pra acompanhar.</div>'}</section>
+    </div>
+    <section class="card"><div class="card-h"><span class="t">${ic('repeat')} Últimos 6 meses</span></div>
       <div class="ch-legend"><span><i class="sq" style="background:var(--green2)"></i>Entradas</span><span><i class="sq" style="background:var(--ink)"></i>Saídas</span></div>
-      <div class="chart" data-chart="months"></div></section>
-    </div>`;
+      <div class="chart" data-chart="months"></div></section>`;
 }
 
 /* gráficos em SVG puro, com tooltip */
@@ -665,7 +840,7 @@ function hoverable(el, onMove, onLeave) {
 function drawCharts() {
   document.querySelectorAll('[data-chart]').forEach(el => {
     const k = el.dataset.chart, o = CH[k]; if (!o) return;
-    if (k === 'cum') lineChart(el, o); else if (k === 'daily') barChart(el, o); else groupChart(el, o);
+    if (k === 'cum' || k === 'boxes') lineChart(el, o); else if (k === 'daily') barChart(el, o); else groupChart(el, o);
   });
 }
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawCharts, 150); });
@@ -674,55 +849,61 @@ let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(dra
 function planView() {
   const N = info();
   const fIn = S.fixed.filter(f => f.kind === 'entra'), fOut = S.fixed.filter(f => f.kind === 'sai');
-  const fixRow = f => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">${esc(f.kind === 'entra' ? '💰' : cat(f.catId)?.icon || '📌')}</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">dia ${pad(f.day || 1)}${acc(f.accId) ? ' · ' + esc(acc(f.accId).name) : ''}${cat(f.catId) && f.kind === 'sai' ? ' · ' + esc(cat(f.catId).name) : ''}</div></div><div class="v ${f.kind === 'entra' ? 'pos' : ''}">${f.kind === 'entra' ? '+' : '-'}${fmt(f.amount)}</div></div>`;
-  return topbar() + `<h1>Planejar</h1><div class="plan-grid"><div>
+  const fixRow = f => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">${esc(f.kind === 'entra' ? '💰' : cat(f.catId)?.icon || '📌')}</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${f.kind === 'entra' ? `${ruleLabel(f)} · ${shortDate(payDate(f, ui.month))}` : `dia ${pad(f.day || 1)}`}${acc(f.accId) ? ' · ' + esc(acc(f.accId).name) : ''}${cat(f.catId) && f.kind === 'sai' ? ' · ' + esc(cat(f.catId).name) : ''}</div></div><div class="v ${f.kind === 'entra' ? 'pos' : ''}">${f.kind === 'entra' ? '+' : '-'}${fmt(f.amount)}</div></div>`;
+  return topbar() + `<h1>Planejar</h1><div class="masonry">
     <section class="card">
-      <div class="card-h"><span class="t">${ic('repeat')} Fixos e salário</span><button class="link" data-a="newFixed">Novo ${ic('plus')}</button></div>
+      <div class="card-h"><span class="t">${ic('repeat')} Rendas e contas fixas</span></div>
+      <div class="duo"><button class="btn ghost" data-a="newIncome">${ic('plus')} Renda</button><button class="btn ghost" data-a="newFixed">${ic('plus')} Conta fixa</button></div>
       <div class="kpis" style="margin-bottom:6px"><div class="kpi" style="background:var(--card2)"><div class="k">Entra por mês</div><div class="v pos">${fmt(N.fixIn)}</div></div><div class="kpi" style="background:var(--card2)"><div class="k">Sai por mês</div><div class="v">${fmt(N.fixOut)}</div></div></div>
-      ${S.fixed.length ? [...fIn, ...fOut].map(fixRow).join('') : `<div class="empty"><b>Nada cadastrado</b>Comece pelo salário e pelo aluguel. Eles aparecem todo mês em Contas a pagar pra você marcar como pago.</div>`}
+      ${S.fixed.length ? [...fIn, ...fOut].map(fixRow).join('') : `<div class="empty"><b>Nada cadastrado</b>Comece pelas suas rendas. Contas fixas (aluguel, assinaturas) aparecem todo mês em Contas a pagar.</div>`}
     </section>
     <section class="card">
       <div class="card-h"><span class="t">${ic('spark')} Valores extras</span><button class="link" data-a="newExtra">Novo ${ic('plus')}</button></div>
       <div class="sub" style="margin:-6px 0 6px">Valores que você controla na mão: reserva, 13º, vale, obra, dinheiro emprestado...</div>
       ${S.extras.length ? S.extras.slice().sort((a, b) => (b.recurring ? 1 : 0) - (a.recurring ? 1 : 0)).map(e => extraRow(e).replace('</div></div><div class="v', `${!e.recurring ? ' · ' + monthName(e.month).toLowerCase() : ''}</div></div><div class="v`)).join('') : `<div class="empty">Nenhum extra ainda.</div>`}
-    </section></div><div>
+    </section>
     <section class="card">
       <div class="card-h"><span class="t">${ic('gauge')} Limites do dia a dia</span><button class="link" data-a="newCat">Categoria ${ic('plus')}</button></div>
       <div class="sub" style="margin:-6px 0 8px">Fixos não entram aqui. O limite do mês é a soma dos limites por categoria.</div>
       <div class="row"><div class="ico">🎯</div><div class="l"><div class="n">Limite do mês</div><div class="d">soma dos limites por categoria</div></div><div class="v">${fmt(N.limit)}</div></div>
       ${S.categories.map(c => { const v = N.byCat.find(x => x.c.id === c.id)?.v || 0; const over = c.limit > 0 && v > c.limit; return `<div class="row tap" data-a="editCat" data-v="${c.id}"><div class="ico">${esc(c.icon)}</div><div class="l"><div class="n">${esc(c.name)}</div><div class="d ${over ? 'neg' : ''}">${fmt0(v)} de ${c.limit > 0 ? fmt0(c.limit) : 'sem limite'} este mês</div>${c.limit > 0 ? `<div class="prog" style="height:5px;margin-top:6px"><i class="${over ? 'over' : ''}" style="width:${Math.min(100, v / c.limit * 100)}%;${over ? '' : `background:${catColor(c)}`}"></i></div>` : ''}</div><div class="v">${c.limit > 0 ? fmt0(c.limit) : '-'}</div></div>`; }).join('')}
-    </section></div></div>`;
+    </section></div>`;
 }
 
 /* ---------- Ajustes ---------- */
 function settingsView() {
   const sw = (k, n, d) => `<label class="switch"><div><div class="n">${n}</div><div class="d">${d}</div></div><span class="tgl"><input type="checkbox" data-set="${k}" ${S[k] ? 'checked' : ''}><i></i></span></label>`;
-  return topbar('Ajustes') + `
+  return topbar('Ajustes') + `<div class="narrow">
     <section class="card" style="display:flex;align-items:center;gap:14px"><div style="width:64px">${byunSVG('happy')}</div><div><div style="font-weight:800;font-size:17px">Oi${S.name ? ', ' + esc(S.name) : ''}!</div><div class="sub">${CLOUD ? 'Seus dados ficam protegidos na sua conta.' : 'O Byun guarda tudo só neste aparelho.'}</div></div></section>
     ${CLOUD && user ? `<div class="section-t">Sua conta</div>
     <section class="card">
       <div class="row" style="padding-top:0"><div class="l"><div class="n">${esc(prof?.display_name || '')} <span class="muted" style="font-weight:500">@${esc(prof?.username || '')}</span></div><div class="d" id="syncState">${syncLabel()}</div></div></div>
+      <button class="btn ghost" data-a="editIdentity">Mudar nome e @usuário</button>
       <button class="btn ghost" data-a="syncNow">Sincronizar agora</button>
       <button class="btn ghost" data-a="changePass">Trocar senha</button>
       <button class="btn ghost" data-a="logout">Sair da conta</button>
     </section>
 ` : ''}
     <div class="section-t">Seu mascote</div>
-    <section class="card pet-card" data-a="editPet"><div class="pet-mini">${byunSVG('happy')}</div><div style="flex:1"><div style="font-weight:800;font-size:16px">${esc(curPet().name || 'Byun')}</div><div class="sub">${esc((SPECIES.find(s => s[0] === curPet().species) || ['', 'Gato'])[1])} · toque pra personalizar</div></div>${ic('right')}</section>
+    <section class="card pet-card" data-a="editPet"><div class="pet-mini ${petCls()}">${byunSVG('happy')}</div><div style="flex:1"><div style="font-weight:800;font-size:16px">${esc(curPet().name || 'Byun')}</div><div class="sub">${esc((SPECIES.find(s => s[0] === curPet().species) || ['', 'Gato'])[1])} · toque pra personalizar</div></div>${ic('right')}</section>
     <div class="section-t">Você e o Byun</div>
     <section class="card">
       <label class="fld" style="margin-top:0"><span>Seu nome</span><input class="inp" data-setv="name" value="${esc(S.name)}" placeholder="Como o Byun te chama"></label>
       <div class="flabel">Tema</div>
       <div class="seg"><button class="${S.theme === 'light' ? 'on' : ''}" data-a="setTheme" data-v="light">Claro</button><button class="${S.theme === 'dark' ? 'on' : ''}" data-a="setTheme" data-v="dark">Escuro</button></div>
-      <div style="margin-top:8px">${sw('follow', 'Seguir o dedo', 'Os olhos do Byun acompanham o toque e o cursor')}${sw('sass', 'Modo julgador', 'Falas com humor ácido. Desligado, ele só informa.')}</div>
+      <div class="flabel">Jeito do ${esc(curPet().name)}</div>
+      <div class="seg">${[['still', 'Paradinho'], ['follow', 'Segue o dedo'], ['bounce', 'Pulandinho']].map(([k, l]) => `<button class="${S.motion === k ? 'on' : ''}" data-a="setMotion" data-v="${k}">${l}</button>`).join('')}</div>
+      <div style="margin-top:8px">${sw('sass', 'Modo julgador', 'Falas com humor ácido. Desligado, ele só informa.')}</div>
     </section>
     <div class="section-t">Contas e cartões</div>
     <section class="card">${S.accounts.map(a => `<div class="row tap" data-a="editAcc" data-v="${a.id}"><div class="ico" style="background:${a.color};border:0;color:#fff;font-size:15px">${isCredit(a) ? ic('card') : ic('wallet')}</div><div class="l"><div class="n">${esc(a.name)} ${S.defaultAcc === a.id ? '<span class="tag gray" style="font-size:10px;padding:1px 7px">padrão</span>' : ''}</div><div class="d">${isCredit(a) ? `Crédito · fecha dia ${a.closing} · vence dia ${a.due} · limite ${fmt0(a.limit)}` : 'Conta / débito / pix'}</div></div>${ic('right')}</div>`).join('')}
       <button class="btn ghost" data-a="newAcc" data-v="conta">${ic('plus')} Adicionar conta ou cartão</button></section>
     <div class="section-t">Categorias</div>
-    <section class="card">${S.categories.map(c => `<div class="row tap" data-a="editCat" data-v="${c.id}"><div class="ico">${esc(c.icon)}</div><div class="l"><div class="n">${esc(c.name)} ${S.housingCat === c.id ? '<span class="tag gray" style="font-size:10px;padding:1px 7px">moradia</span>' : ''}</div><div class="d">${c.limit > 0 ? 'limite ' + fmt0(c.limit) : 'sem limite'}</div></div><span class="dot" style="background:${catColor(c)}"></span></div>`).join('')}
+    <section class="card">${S.categories.map(c => `<div class="row tap" data-a="editCat" data-v="${c.id}"><div class="ico">${esc(c.icon)}</div><div class="l"><div class="n">${esc(c.name)}</div><div class="d">${c.limit > 0 ? 'limite ' + fmt0(c.limit) : 'sem limite'}</div></div><span class="dot" style="background:${catColor(c)}"></span></div>`).join('')}
       <button class="btn ghost" data-a="newCat">${ic('plus')} Nova categoria</button>
-      <label class="fld"><span>Referência de moradia (% do que entra)</span><input class="inp" data-setv="housingRef" inputmode="numeric" value="${S.housingRef}"></label></section>
+</section>
+    <div class="section-t">Cofrinho</div>
+    <section class="card"><label class="fld" style="margin-top:0"><span>CDI ao ano (%)</span><input class="inp" data-setv="cdi" inputmode="decimal" value="${String(S.cdi).replace('.', ',')}"><span class="hint">Usado pra estimar quanto as caixinhas rendem. Atualize quando o Copom mudar a Selic.</span></label></section>
     <div class="section-t">Seus dados</div>
     <section class="card">
       <button class="btn ghost" style="margin-top:0" data-a="go" data-v="install">${ic('share')} Instalar no celular</button>
@@ -731,7 +912,7 @@ function settingsView() {
       <button class="btn ghost danger" data-a="wipe">Apagar todos os lançamentos</button>
       ${CLOUD && user ? '<button class="btn ghost danger" data-a="delAccount">Excluir minha conta</button>' : ''}
     </section>
-    <p class="sub" style="text-align:center;margin:18px 0">Byun 1.1 · feito com carinho e um pouco de julgamento</p>`;
+    <p class="sub" style="text-align:center;margin:18px 0">Byun 1.1 · feito com carinho e um pouco de julgamento</p></div>`;
 }
 
 /* ---------- instalação ---------- */
@@ -746,6 +927,7 @@ function installView() {
 }
 
 /* ---------- onboarding ---------- */
+function obData() { return ui.obd = ui.obd || { name: S.name || prof?.display_name || '', limit: '984,00', incomes: [{ name: 'Salário', amount: '', rule: 'util5', day: '5' }], saved: '', savedAcc: S.defaultAcc, savedRate: '100' }; }
 function onboarding() {
   const dots = `<div class="dots">${[0, 1, 2].map(i => `<i class="${ui.ob === i ? 'on' : ''}"></i>`).join('')}</div>`;
   if (ui.ob === 0) return `<div class="ob"><div class="logo">${byunSVG('happy')}</div><div class="wordmark">byun</div>
@@ -754,13 +936,27 @@ function onboarding() {
     <div class="feat"><i>🎯</i>Defina o teto do mês e veja quanto sobra</div>
     <div class="feat"><i>🐾</i>O ${esc(curPet().name)} avisa antes de você estourar</div>${dots}
     <button class="btn" data-a="ob" data-v="1">Continuar</button></div>`;
-  if (ui.ob === 1) return `<div class="ob"><div style="width:90px;margin:0 auto">${byunSVG('normal')}</div><h1 style="text-align:center">Prazer, eu sou o ${esc(curPet().name)}</h1>
-    <form id="obForm">
-      <label class="fld"><span>Como posso te chamar?</span><input name="name" value="${esc(S.name)}" placeholder="Seu nome" autocomplete="given-name"></label>
-      <label class="fld"><span>Quanto quer gastar no dia a dia por mês?</span><input name="limit" inputmode="decimal" placeholder="984,00" value="984,00"><span class="hint">Mercado, delivery, transporte, lazer... Fixos como aluguel ficam de fora. Dá pra ajustar por categoria depois.</span></label>
-      <label class="fld"><span>Salário ou renda do mês (opcional)</span><input name="salary" inputmode="decimal" placeholder="0,00"></label>
-      <label class="fld"><span>Dia que cai</span><input name="day" inputmode="numeric" placeholder="5" value="5"></label>
+  if (ui.ob === 1) {
+    const d = obData();
+    return `<div class="ob"><div class="logo-wrap ${petCls()}" style="width:90px;margin:0 auto">${byunSVG('normal')}</div><h1 style="text-align:center">Prazer, eu sou o ${esc(curPet().name)}</h1>
+    <form id="obForm" novalidate>
+      <label class="fld"><span>Como posso te chamar?</span><input data-ob="name" value="${esc(d.name)}" placeholder="Seu nome" autocomplete="given-name"></label>
+      <label class="fld"><span>Quanto quer gastar no dia a dia por mês?</span><input data-ob="limit" inputmode="decimal" placeholder="984,00" value="${esc(d.limit)}"><span class="hint">Mercado, delivery, transporte, lazer... Contas fixas ficam de fora. Dá pra ajustar por categoria depois.</span></label>
+      <div class="flabel" style="margin-top:22px">Suas rendas</div>
+      ${d.incomes.map((r, i) => `<div class="ob-box">
+        <div class="duo"><label class="fld" style="margin-top:0"><span>Nome</span><input data-obi="${i}" data-k="name" value="${esc(r.name)}" placeholder="Salário"></label>
+        <label class="fld" style="margin-top:0"><span>Valor</span><input data-obi="${i}" data-k="amount" inputmode="decimal" value="${esc(r.amount)}" placeholder="0,00"></label></div>
+        <div class="fld"><span>Quando cai</span><div class="radios">${RULES.map(([k, l]) => `<label><input type="radio" name="rule${i}" data-obi="${i}" data-k="rule" value="${k}" ${r.rule === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
+        ${r.rule === 'dia' ? `<label class="fld"><span>Dia</span><input data-obi="${i}" data-k="day" inputmode="numeric" value="${esc(r.day)}" placeholder="10"></label>` : ''}
+        ${d.incomes.length > 1 ? `<button type="button" class="link" style="color:var(--danger);margin-top:8px" data-a="obDelIncome" data-v="${i}">Remover</button>` : ''}
+      </div>`).join('')}
+      <button type="button" class="btn ghost" data-a="obAddIncome">${ic('plus')} Outra renda</button>
+      <div class="flabel" style="margin-top:22px">Dinheiro guardado</div>
+      <label class="fld" style="margin-top:0"><span>Quanto você já tem guardado?</span><input data-ob="saved" inputmode="decimal" value="${esc(d.saved)}" placeholder="0,00"><span class="hint">Vira sua primeira caixinha no cofrinho. Pode deixar vazio.</span></label>
+      <div class="duo"><label class="fld"><span>Onde está</span><select data-ob="savedAcc">${S.accounts.map(a => `<option value="${a.id}" ${d.savedAcc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
+      <label class="fld"><span>Rende (% do CDI)</span><input data-ob="savedRate" inputmode="decimal" value="${esc(d.savedRate)}" placeholder="100"></label></div>
       ${dots}<button class="btn" type="submit">Continuar</button></form></div>`;
+  }
   return `<div class="ob"><h1 style="text-align:center;margin-bottom:4px">Instale no celular</h1><p class="lead">Fica na tela de início, abre em tela cheia e funciona como um app.</p>
     <div class="phone"><div class="appicon"><div style="width:44px">${byunSVG('normal')}</div></div><small>Byun</small></div>${installSteps()}${dots}
     <button class="btn" data-a="obDone">Começar</button><button class="btn ghost" data-a="obDone">Agora não</button></div>`;
@@ -839,28 +1035,34 @@ function saveDraft() {
 }
 
 /* formulário genérico */
-function openForm({ title, fields, values = {}, onSave, onDelete, saveLabel = 'Salvar' }) {
-  const fh = f => {
+function openForm({ title, fields, values = {}, onSave, onDelete, saveLabel = 'Salvar', onChange, onInput, onOpen }) {
+  const fh0 = f => {
     const v = values[f.key] ?? f.def ?? '';
     const hint = f.hint ? `<span class="hint">${f.hint}</span>` : '';
     if (f.type === 'radios') return `<div class="fld"><span>${f.label}</span><div class="radios">${f.options.map(([ov, ol]) => `<label><input type="radio" name="${f.key}" value="${ov}" ${String(v) === String(ov) ? 'checked' : ''}><span>${ol}</span></label>`).join('')}</div>${hint}</div>`;
-    if (f.type === 'colors') return `<div class="fld"><span>${f.label}</span><div class="swatches">${[...new Set([...(f.options), v].filter(Boolean))].map(c => `<label><input type="radio" name="${f.key}" value="${c}" ${v === c ? 'checked' : ''}><span style="background:${c}"></span></label>`).join('')}<label title="Outra cor"><input type="color" name="${f.key}_custom" value="${v || '#1f5a3a'}" style="position:static;opacity:1;width:34px;height:34px;border:0;padding:0;background:none"></label></div>${hint}</div>`;
-    if (f.type === 'toggle') return `<label class="switch fld"><div><div class="n">${f.label}</div>${f.hint ? `<div class="d">${f.hint}</div>` : ''}</div><span class="tgl"><input type="checkbox" name="${f.key}" ${v ? 'checked' : ''}><i></i></span></label>`;
+    if (f.type === 'colors') return `<div class="fld"><span>${f.label}</span><div class="swatches">${[...new Set([...(f.options), v].filter(Boolean))].map(c => `<label><input type="radio" name="${f.key}" value="${c}" ${v === c ? 'checked' : ''}><span style="background:${c}"></span></label>`).join('')}<label class="custom-c" title="Outra cor"><input type="color" name="${f.key}_custom" value="${v || '#1f5a3a'}"></label></div>${hint}</div>`;
+    if (f.type === 'toggle') return `<label class="switch fld ${f.disabled ? 'off' : ''}"><div><div class="n">${f.label}</div>${f.hint ? `<div class="d">${f.hint}</div>` : ''}</div><span class="tgl"><input type="checkbox" name="${f.key}" ${v ? 'checked' : ''} ${f.disabled ? 'disabled' : ''}><i></i></span></label>`;
+    if (f.type === 'html') return f.html;
     if (f.type === 'select') return `<label class="fld"><span>${f.label}</span><select name="${f.key}">${f.options.map(([ov, ol]) => `<option value="${ov}" ${String(v) === String(ov) ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>${hint}</label>`;
     if (f.type === 'money') return `<label class="fld"><span>${f.label}</span><input name="${f.key}" inputmode="decimal" placeholder="0,00" value="${moneyInput(v)}">${hint}</label>`;
+    if (f.type === 'date') return `<label class="fld"><span>${f.label}</span><input name="${f.key}" type="date" value="${esc(v)}">${hint}</label>`;
     if (f.type === 'textarea') return `<label class="fld"><span>${f.label}</span><textarea name="${f.key}">${esc(v)}</textarea>${hint}</label>`;
     return `<label class="fld"><span>${f.label}</span><input name="${f.key}" ${f.type === 'number' ? 'inputmode="numeric"' : ''} ${f.max ? `maxlength="${f.max}"` : ''} placeholder="${esc(f.ph || '')}" value="${esc(v)}">${hint}</label>`;
   };
+  const fh = f => `<div data-fk="${f.key}">${fh0(f)}</div>`;
   openSheet(sheetHead(title) + `<form id="gform" novalidate>${fields.map(fh).join('')}<button class="btn" type="submit">${saveLabel}</button>${onDelete ? '<button type="button" class="btn ghost danger" id="gdel">Excluir</button>' : ''}</form>`);
   const form = $('#gform');
-  form.addEventListener('change', e => { if (e.target.type === 'color') { const k = e.target.name.replace('_custom', ''); form.querySelectorAll(`input[name="${k}"]`).forEach(r => r.checked = false); } });
+  form.addEventListener('change', e => { if (e.target.type === 'color') { const k = e.target.name.replace('_custom', ''); form.querySelectorAll(`input[name="${k}"]`).forEach(r => r.checked = false); } if (onChange) onChange(form, e.target.name, e.target); });
+  if (onInput) form.addEventListener('input', e => onInput(form, e.target.name, e.target));
+  if (onOpen) onOpen(form);
   form.addEventListener('submit', e => {
     e.preventDefault(); const out = {};
     for (const f of fields) {
+      if (f.type === 'html') continue;
       if (f.type === 'toggle') out[f.key] = form.querySelector(`[name="${f.key}"]`).checked;
       else if (f.type === 'radios' || f.type === 'colors') { const r = form.querySelector(`[name="${f.key}"]:checked`); out[f.key] = r ? r.value : (f.type === 'colors' ? form.querySelector(`[name="${f.key}_custom"]`).value : f.def); }
       else { const el = form.querySelector(`[name="${f.key}"]`); out[f.key] = f.type === 'money' ? parseMoney(el.value) : f.type === 'number' ? (parseInt(el.value) || 0) : el.value.trim(); }
-      if (f.req && !out[f.key]) { toast(`Preencha: ${f.label}`); return; }
+      if (f.req && !out[f.key] && !(f.reqIf && !f.reqIf(form))) { toast(`Preencha: ${f.label}`); return; }
     }
     onSave(out); save(); closeSheet(); render();
   });
@@ -869,18 +1071,34 @@ function openForm({ title, fields, values = {}, onSave, onDelete, saveLabel = 'S
 
 const catOpts = () => [['', 'Sem categoria'], ...S.categories.map(c => [c.id, `${c.icon} ${c.name}`])];
 const accOpts = () => [['', 'Nenhuma'], ...S.accounts.map(a => [a.id, a.name])];
-function fixedForm(f) {
+function fixedForm(f, kind) {
+  kind = f ? f.kind : (kind || 'sai');
+  if (kind === 'entra') return incomeForm(f);
   openForm({
-    title: f ? 'Editar fixo' : 'Novo fixo', values: f || { kind: 'sai', day: 5 },
+    title: f ? 'Editar conta fixa' : 'Nova conta fixa', values: f || { day: 10 },
     fields: [
-      { key: 'kind', label: 'Tipo', type: 'radios', options: [['entra', 'Entra (salário, renda)'], ['sai', 'Sai (aluguel, assinatura)']], def: 'sai' },
-      { key: 'name', label: 'Nome', ph: 'Ex.: Aluguel, Salário, Spotify', req: true, max: 40 },
+      { key: 'name', label: 'Nome', ph: 'Ex.: Aluguel, Internet, Spotify', req: true, max: 40 },
       { key: 'amount', label: 'Valor por mês', type: 'money', req: true },
-      { key: 'day', label: 'Dia do vencimento / recebimento', type: 'number', def: 5 },
-      { key: 'catId', label: 'Categoria', type: 'select', options: catOpts(), hint: 'Use Moradia pro aluguel, condomínio e luz entrarem no card de moradia.' },
+      { key: 'day', label: 'Dia do vencimento', type: 'number', def: 10 },
+      { key: 'catId', label: 'Categoria', type: 'select', options: catOpts() },
       { key: 'accId', label: 'Conta', type: 'select', options: accOpts() }
     ],
-    onSave: v => { v.day = Math.min(31, Math.max(1, v.day || 1)); if (f) Object.assign(f, v); else S.fixed.push({ id: uid(), since: ui.month, ...v }); },
+    onSave: v => { v.kind = 'sai'; v.day = Math.min(31, Math.max(1, v.day || 1)); if (f) Object.assign(f, v); else S.fixed.push({ id: uid(), since: ui.month, ...v }); },
+    onDelete: f ? () => { S.fixed = S.fixed.filter(x => x.id !== f.id); } : null
+  });
+}
+function incomeForm(f) {
+  openForm({
+    title: f ? 'Editar renda' : 'Nova renda', values: f ? { ...f, sat: f.sat !== false } : { rule: 'util5', day: 5, sat: true, accId: S.defaultAcc },
+    fields: [
+      { key: 'name', label: 'Nome', ph: 'Ex.: Salário, Estágio, Freela fixo', req: true, max: 40 },
+      { key: 'amount', label: 'Valor por mês', type: 'money', req: true },
+      { key: 'rule', label: 'Quando cai', type: 'radios', options: RULES, def: 'util5' },
+      { key: 'day', label: 'Dia (só para "Dia fixo")', type: 'number', def: 5 },
+      { key: 'sat', label: 'Sábado conta como dia útil', type: 'toggle', hint: 'Vale para o 5º dia útil. Pela regra da CLT, o sábado conta.' },
+      { key: 'accId', label: 'Cai em qual conta', type: 'select', options: accOpts() }
+    ],
+    onSave: v => { v.kind = 'entra'; v.day = Math.min(31, Math.max(1, v.day || 1)); if (f) Object.assign(f, v); else S.fixed.push({ id: uid(), since: ui.month, ...v }); },
     onDelete: f ? () => { S.fixed = S.fixed.filter(x => x.id !== f.id); } : null
   });
 }
@@ -901,33 +1119,85 @@ function extraForm(e) {
     onDelete: e ? () => { S.extras = S.extras.filter(x => x.id !== e.id); } : null
   });
 }
+const EMOJI_MAP = [
+  [['mercado', 'supermercado', 'feira', 'compras do mes', 'hortifruti'], '🛒'], [['comida', 'alimentacao', 'refeicao', 'almoco', 'janta'], '🍽️'],
+  [['restaurante'], '🍽️'], [['delivery', 'ifood', 'entrega'], '🛵'], [['lanche', 'hamburguer', 'fast'], '🍔'], [['pizza'], '🍕'],
+  [['cafe', 'cafeteria'], '☕'], [['padaria', 'pao'], '🥐'], [['doce', 'sorvete', 'chocolate'], '🍫'], [['bar', 'cerveja', 'bebida', 'balada'], '🍻'],
+  [['transporte', 'onibus', 'passagem'], '🚌'], [['metro', 'trem'], '🚇'], [['uber', '99', 'taxi', 'corrida'], '🚕'], [['carro', 'estacionamento', 'pedagio'], '🚗'],
+  [['gasolina', 'combustivel', 'posto', 'etanol'], '⛽'], [['moto'], '🏍️'], [['bike', 'bicicleta'], '🚲'],
+  [['saude', 'farmacia', 'remedio'], '💊'], [['medico', 'consulta', 'exame', 'hospital', 'plano de saude'], '🩺'], [['dentista'], '🦷'], [['terapia', 'psicolog'], '🧠'],
+  [['academia', 'treino', 'gym', 'musculacao'], '🏋️'], [['esporte', 'futebol'], '⚽'], [['pet', 'cachorro', 'gato', 'racao', 'veterin'], '🐾'],
+  [['casa', 'moradia', 'aluguel', 'financiamento'], '🏠'], [['condominio', 'apartamento'], '🏢'], [['luz', 'energia', 'eletric'], '💡'], [['agua', 'saneamento'], '💧'], [['gas'], '🔥'],
+  [['internet', 'wifi'], '📶'], [['celular', 'telefone', 'plano', 'chip'], '📱'], [['contas', 'boleto', 'fatura'], '🧾'],
+  [['assinatura', 'streaming', 'netflix', 'prime', 'disney', 'max', 'tv'], '📺'], [['spotify', 'musica', 'show'], '🎵'],
+  [['lazer', 'diversao', 'passeio', 'role'], '🎉'], [['cinema', 'filme', 'teatro'], '🎬'], [['viagem', 'ferias', 'hotel', 'passagem aerea', 'voo'], '✈️'],
+  [['roupa', 'vestuario', 'loja', 'shopee', 'shein', 'moda'], '👕'], [['sapato', 'tenis'], '👟'], [['beleza', 'cabelo', 'unha', 'salao', 'estetica'], '💅'], [['maquiagem', 'skincare', 'cosmetico'], '💄'],
+  [['presente', 'aniversario'], '🎁'], [['educacao', 'faculdade', 'curso', 'puc', 'mensalidade', 'estudo'], '📚'], [['livro', 'leitura'], '📖'], [['escola', 'material escolar'], '🎒'],
+  [['trabalho', 'escritorio'], '💼'], [['investimento', 'acoes', 'tesouro', 'cdb'], '📈'], [['reserva', 'poupanca', 'guardar', 'cofrinho'], '🐷'],
+  [['divida', 'emprestimo', 'parcela', 'juros'], '💸'], [['cartao', 'credito'], '💳'], [['filho', 'bebe', 'crianca', 'fralda'], '🍼'], [['jogo', 'game', 'videogame', 'steam'], '🎮'],
+  [['festa', 'comemoracao'], '🥳'], [['doacao', 'caridade', 'dizimo', 'oferta'], '❤️'], [['igreja', 'religiao'], '⛪'], [['imposto', 'iptu', 'ipva', 'taxa'], '🏛️'],
+  [['seguro', 'protecao'], '🛡️'], [['manutencao', 'conserto', 'reforma', 'obra'], '🔧'], [['eletronico', 'computador', 'notebook', 'tecnologia'], '💻'], [['mae', 'pai', 'familia'], '👨‍👩‍👧'],
+  [['outros', 'diversos', 'geral'], '📦']
+];
+function suggestEmojis(name) {
+  const n = norm(name); const hits = [];
+  if (n.trim()) EMOJI_MAP.forEach(([words, e]) => { if (words.some(w => n.includes(w)) && !hits.includes(e)) hits.push(e); });
+  ['🏷️', '📦', '✨', '💸', '🎯', '🛍️'].forEach(e => { if (hits.length < 6 && !hits.includes(e)) hits.push(e); });
+  return hits.slice(0, 6);
+}
 function catForm(c) {
   openForm({
     title: c ? 'Editar categoria' : 'Nova categoria', values: c ? { ...c, housing: S.housingCat === c.id } : { icon: '🏷️' },
     fields: [
       { key: 'name', label: 'Nome', req: true, max: 30, ph: 'Ex.: Pet, Academia' },
       { key: 'icon', label: 'Emoji', max: 4, ph: '🏷️' },
-      { key: 'limit', label: 'Limite por mês', type: 'money', hint: 'Deixe vazio pra sem limite' },
-      { key: 'housing', label: 'É a categoria de moradia', type: 'toggle' }
+      { key: 'emo', type: 'html', html: `<div class="emoji-sug" id="emoSug">${suggestEmojis(c?.name).map(e => `<button type="button" data-emo="${e}">${e}</button>`).join('')}</div>` },
+      { key: 'limit', label: 'Limite por mês', type: 'money', hint: 'Deixe vazio pra sem limite' }
     ],
+    onOpen: form => { let auto = !c; form.addEventListener('click', e => { const b = e.target.closest('[data-emo]'); if (b) { form.querySelector('[name=icon]').value = b.dataset.emo; auto = false; form.querySelectorAll('[data-emo]').forEach(x => x.classList.toggle('on', x === b)); } }); form._auto = () => auto; form._noAuto = () => auto = false; },
+    onInput: (form, k, el) => {
+      if (k === 'icon') { form._noAuto(); return; }
+      if (k !== 'name') return;
+      const sug = suggestEmojis(el.value); $('#emoSug').innerHTML = sug.map((e, i) => `<button type="button" data-emo="${e}" class="${i === 0 && form._auto() ? 'on' : ''}">${e}</button>`).join('');
+      if (form._auto()) form.querySelector('[name=icon]').value = sug[0];
+    },
     onSave: v => { const h = v.housing; delete v.housing; let t = c; if (c) Object.assign(c, v); else { t = { id: uid(), color: S.categories.length % 8, ...v }; S.categories.push(t); } if (h) S.housingCat = t.id; if (draft) draft.catId = t.id; },
     onDelete: c && S.categories.length > 1 ? () => { S.categories = S.categories.filter(x => x.id !== c.id); } : null
   });
 }
 function accForm(a, type = 'conta') {
+  const other = S.accounts.find(x => x.id === S.defaultAcc && (!a || x.id !== a.id));
+  const nameFor = (bank, tp) => { const n = bankOf(bank)[1].replace(' Bank', '').replace('Outro banco', ''); return tp === 'credito' ? `Cartão ${n}`.trim() : n; };
+  const start = a ? { ...a, isDefault: S.defaultAcc === a.id } : { bank: 'nubank', type, color: bankOf('nubank')[2], name: nameFor('nubank', type), closing: 3, due: 10 };
+  let autoName = !a;
   openForm({
-    title: a ? 'Editar conta' : 'Nova conta ou cartão', values: a ? { ...a, isDefault: S.defaultAcc === a.id } : { type, color: '#1f5a3a', closing: 3, due: 10 },
+    title: a ? 'Editar conta' : 'Nova conta ou cartão', values: start,
     fields: [
-      { key: 'name', label: 'Nome', req: true, max: 30, ph: 'Ex.: Cartão Santander' },
+      { key: 'bank', label: 'Banco', type: 'select', options: BANKS.map(b => [b[0], b[1]]) },
       { key: 'type', label: 'Tipo', type: 'radios', options: [['conta', 'Conta / débito / pix'], ['credito', 'Cartão de crédito']], def: type },
-      { key: 'color', label: 'Cor', type: 'colors', options: ACC_COLORS },
-      { key: 'limit', label: 'Limite do cartão', type: 'money', hint: 'Só para cartão de crédito' },
-      { key: 'closing', label: 'Dia que a fatura fecha', type: 'number', hint: 'Compras depois desse dia vão pra próxima fatura' },
-      { key: 'due', label: 'Dia do vencimento', type: 'number' },
-      { key: 'isDefault', label: 'Conta padrão nos lançamentos', type: 'toggle' }
+      { key: 'name', label: 'Nome', req: true, max: 30, ph: 'Ex.: Cartão Santander' },
+      { key: 'color', label: 'Cor', type: 'colors', options: [...new Set(BANKS.map(b => b[2]))].slice(0, 9) },
+      { key: 'limit', label: 'Limite do cartão', type: 'money' },
+      { key: 'closing', label: 'Dia que a fatura fecha (1 a 31)', type: 'number', req: true, reqIf: f => f.querySelector('[name=type]:checked')?.value === 'credito', hint: 'Compras depois desse dia vão pra próxima fatura' },
+      { key: 'due', label: 'Dia do vencimento (1 a 31)', type: 'number', req: true, reqIf: f => f.querySelector('[name=type]:checked')?.value === 'credito' },
+      { key: 'isDefault', label: 'Conta padrão nos lançamentos', type: 'toggle', disabled: !!other, hint: other ? `A padrão hoje é ${esc(other.name)}. Pra trocar, abra ela e desligue a opção lá.` : 'Já vem selecionada quando você lança um gasto.' }
     ],
-    onSave: v => { const d = v.isDefault; delete v.isDefault; let t = a; if (a) Object.assign(a, v); else { t = { id: uid(), ...v }; S.accounts.push(t); } if (d) S.defaultAcc = t.id; },
-    onDelete: a && S.accounts.length > 1 ? () => { S.accounts = S.accounts.filter(x => x.id !== a.id); if (S.defaultAcc === a.id) S.defaultAcc = S.accounts[0].id; } : null
+    onOpen: form => { const t = () => { const cr = form.querySelector('[name=type]:checked')?.value === 'credito'; ['limit', 'closing', 'due'].forEach(k => form.querySelector(`[data-fk=${k}]`).style.display = cr ? '' : 'none'); }; t(); form._t = t; },
+    onInput: (form, k) => { if (k === 'name') autoName = false; },
+    onChange: (form, k) => {
+      const bank = form.querySelector('[name=bank]').value, tp = form.querySelector('[name=type]:checked')?.value;
+      if (k === 'type') form._t();
+      if ((k === 'bank' || k === 'type') && autoName) form.querySelector('[name=name]').value = nameFor(bank, tp);
+      if (k === 'bank') { const c = bankOf(bank)[2]; const sw = form.querySelector(`[name=color][value="${c}"]`); form.querySelectorAll('[name=color]').forEach(r => r.checked = false); if (sw) sw.checked = true; else form.querySelector('[name=color_custom]').value = c; }
+    },
+    onSave: v => {
+      const d = v.isDefault; delete v.isDefault;
+      if (v.type === 'credito') { v.closing = Math.min(31, Math.max(1, v.closing || 1)); v.due = Math.min(31, Math.max(1, v.due || 10)); } else { v.closing = 0; v.due = 0; v.limit = 0; }
+      let t = a; if (a) Object.assign(a, v); else { t = { id: uid(), ...v }; S.accounts.push(t); }
+      if (d) S.defaultAcc = t.id; else if (S.defaultAcc === t.id) S.defaultAcc = null;
+      sortAccounts();
+    },
+    onDelete: a && S.accounts.length > 1 ? () => { S.accounts = S.accounts.filter(x => x.id !== a.id); if (S.defaultAcc === a.id) S.defaultAcc = null; } : null
   });
 }
 
@@ -966,16 +1236,16 @@ function authView() {
       <p class="lead" style="margin-bottom:10px">${forced ? 'Antes de começar, crie a sua senha. A senha inicial era só pra entrar.' : 'Escolha uma senha nova.'}</p>
       <form id="authForm" data-mode="newpass" method="post" action="#" novalidate>
         <input name="username" autocomplete="username" value="${esc(prof?.username || '')}" readonly hidden>
-        <label class="fld"><span>Nova senha</span><input name="password" type="password" autocomplete="new-password" required placeholder="mínimo 8, com letra e número"></label>
-        <label class="fld"><span>Repita a senha</span><input name="password2" type="password" autocomplete="new-password" required></label>
+        <label class="fld"><span>NOVA SENHA</span><input name="password" type="password" autocomplete="new-password" required placeholder="MÍNIMO 8, COM LETRA E NÚMERO"></label>
+        <label class="fld"><span>REPITA A SENHA</span><input name="password2" type="password" autocomplete="new-password" required placeholder="REPITA A SENHA"></label>
         ${msg}<button class="btn" type="submit">Salvar e entrar</button></form>
       ${forced ? '<button class="btn ghost" data-a="logout">Sair</button>' : '<button class="btn ghost" data-a="authMode" data-v="">Cancelar</button>'}</div>`;
   }
-  return `<div class="ob"><div style="width:110px;margin:0 auto">${byunSVG('happy')}</div><div class="wordmark">byun</div>
+  return `<div class="ob"><div class="logo-wrap ${petCls()}" style="width:110px;margin:0 auto">${byunSVG('happy')}</div><div class="wordmark">byun</div>
     <p class="lead" style="margin-bottom:10px">Seu cofrinho que te julga. Pra você saber quanto ainda pode gastar no mês.</p>
     <form id="authForm" data-mode="login" method="post" action="#" novalidate>
-      <label class="fld"><span>Usuário</span><input name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="Ex.: Layla"></label>
-      <label class="fld"><span>Senha</span><input name="password" type="password" autocomplete="current-password" required placeholder="sua senha"></label>
+      <label class="fld"><span>USUÁRIO</span><input name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="DIGITE SEU USUÁRIO"></label>
+      <label class="fld"><span>SENHA</span><input name="password" type="password" autocomplete="current-password" required placeholder="DIGITE SUA SENHA"></label>
       ${msg}<button class="btn" type="submit">Entrar</button></form>
     <p class="sub" style="text-align:center;margin-top:16px">Esqueceu a senha? Peça pra administradora redefinir.</p></div>`;
 }
@@ -1048,7 +1318,7 @@ function adminView() {
   return `<div class="top"><b style="font-size:15px">Painel admin</b><button class="icon-btn" data-a="logout" aria-label="Sair">${ic('x')}</button></div>
     <h1>Pessoas</h1>
     ${!ui.users ? '<div class="empty">Carregando...</div>' : users.map(x => `<section class="card admin-user">
-      <div style="display:flex;align-items:center;gap:14px"><div class="pet-mini">${byunSVG('happy', x.pet)}</div>
+      <div style="display:flex;align-items:center;gap:14px"><div class="pet-mini ${petCls(x.pet)}">${byunSVG('happy', x.pet)}</div>
         <div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px">${esc(x.display_name)} <span class="muted" style="font-weight:500;font-size:13px">@${esc(x.username)}</span></div>
         <div class="sub">${x.must_change ? '<span class="tag yellow">precisa criar a senha</span>' : '<span class="tag">ativa</span>'} · último acesso: ${when(x.last_sign_in_at)}</div></div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn ghost" data-a="adPet" data-v="${esc(x.username)}">Editar mascote</button><button class="btn ghost" data-a="adReset" data-v="${esc(x.username)}">Redefinir senha</button></div>
@@ -1077,6 +1347,7 @@ document.addEventListener('click', e => {
     case 'month': ui.month = addMonths(ui.month, +v); ui.msgI = 0; render(); break;
     case 'theme': S.theme = S.theme === 'dark' ? 'light' : 'dark'; save(); render(); break;
     case 'setTheme': S.theme = v; save(); render(); break;
+    case 'setMotion': S.motion = v; save(); document.querySelectorAll('.byun .eyes').forEach(g => g.removeAttribute('transform')); render(); break;
     case 'poke': {
       ui.msgI++; const n = N(); const b = $('.bubble'); if (b) { b.textContent = fala(n, mood(n)); b.style.animation = 'none'; b.offsetHeight; b.style.animation = ''; }
       const w = $('.byun-wrap'); if (w) { w.classList.remove('boop'); w.offsetWidth; w.classList.add('boop'); }
@@ -1100,7 +1371,17 @@ document.addEventListener('click', e => {
     case 'catF': ui.catF = ui.catF === v ? null : v; render(); break;
     case 'payDay': ui.payDay = ui.payDay === +v ? null : +v; render(); break;
     case 'pay': { const m = ui.month; const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(v); if (i >= 0) p.splice(i, 1); else { p.push(v); toast('Marcado como pago'); } save(); render(); break; }
-    case 'newFixed': fixedForm(); break;
+    case 'newFixed': fixedForm(null, 'sai'); break;
+    case 'newIncome': incomeForm(); break;
+    case 'newBox': boxForm(); break;
+    case 'editBox': { const b = box(v); closeSheet(); boxForm(b); break; }
+    case 'openBox': boxSheet(v); break;
+    case 'goBoxes': { const c = $('#cofrinho'); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.classList.remove('flash'); c.offsetWidth; c.classList.add('flash'); } break; }
+    case 'move': { const b = el.dataset.b; closeSheet(); moveForm(v, b); break; }
+    case 'fixBal': { const b = box(v); closeSheet(); openForm({ title: 'Atualizar saldo', saveLabel: 'Atualizar', values: { real: boxBal(b) }, fields: [{ key: 'real', label: `Quanto tem hoje em ${b.name}?`, type: 'money', hint: 'Olhe no app do banco. A diferença entra como rendimento.' }], onSave: x => { const diff = Math.round((x.real - boxBal(b)) * 100) / 100; if (diff) S.moves.push({ id: uid(), boxId: b.id, type: 'rend', amount: diff, date: todayISO(), note: 'Ajuste pelo saldo do banco' }); toast('Saldo atualizado'); } }); break; }
+    case 'delMove': if (el.dataset.sure) { const m = S.moves.find(x => x.id === v); S.moves = S.moves.filter(x => x.id !== v); save(); closeSheet(); render(); if (m) boxSheet(m.boxId); } else { el.dataset.sure = 1; el.querySelector('.n').textContent = 'Toque de novo pra apagar'; } break;
+    case 'obAddIncome': obData().incomes.push({ name: '', amount: '', rule: 'util5', day: '5' }); render(); break;
+    case 'obDelIncome': obData().incomes.splice(+v, 1); render(); break;
     case 'editFixed': fixedForm(S.fixed.find(x => x.id === v)); break;
     case 'newExtra': extraForm(); break;
     case 'editExtra': extraForm(S.extras.find(x => x.id === v)); break;
@@ -1119,6 +1400,16 @@ document.addEventListener('click', e => {
     case 'changePass': ui.auth = 'newpass'; ui.forced = false; ui.authMsg = ''; render(); break;
     case 'delAccount': if (el.dataset.sure) { delAccount(); } else { el.dataset.sure = 1; el.textContent = 'Toque de novo: apaga a conta e TODOS os dados'; } break;
     case 'copyTxt': copyText(v, 'Copiado'); break;
+    case 'editIdentity': openForm({ title: 'Nome e usuário', values: { display: prof.display_name, username: prof.username },
+      fields: [{ key: 'display', label: 'Nome', req: true, max: 30, hint: 'É como o app te chama.' }, { key: 'username', label: '@usuário (pra entrar)', req: true, max: 30, hint: 'Só letras minúsculas, números, ponto ou traço. Depois de mudar, entre com o novo usuário e atualize no gerenciador de senhas.' }],
+      onSave: async x => {
+        const nu = x.username.toLowerCase().replace(/^@/, '');
+        if (!/^[a-z0-9._-]{2,30}$/.test(nu)) { toast('Usuário inválido'); return; }
+        const r1 = await sb.from('profiles').update({ display_name: x.display }).eq('user_id', user.id);
+        if (!r1.error) { prof.display_name = x.display; S.name = x.display; save(); }
+        if (nu !== prof.username) { const r2 = await sb.rpc('change_my_username', { p_new: nu }); if (r2.error) { toast(/EM_USO/.test(r2.error.message) ? 'Esse usuário já existe' : 'Não consegui mudar o usuário'); return; } prof.username = nu; toast(`Agora você entra como ${nu}`); } else toast('Nome atualizado');
+        cacheProf(); render();
+      } }); break;
     case 'editPet': openPetEditor(curPet(), p => savePet(p)); break;
     case 'peMood': petEdit.mood++; renderPetEditor(); break;
     case 'peSpecies': petEdit.p.species = v; renderPetEditor(); break;
@@ -1135,22 +1426,25 @@ document.addEventListener('click', e => {
 document.addEventListener('submit', e => {
   if (e.target.id === 'authForm') { e.preventDefault(); authSubmit(e.target); return; }
   if (e.target.id !== 'obForm') return;
-  e.preventDefault(); const f = new FormData(e.target);
-  S.name = String(f.get('name') || '').trim();
-  const L = parseMoney(f.get('limit')) || 984;
+  e.preventDefault(); const d = obData();
+  S.name = String(d.name || '').trim();
+  const L = parseMoney(d.limit) || 984;
   const base = S.categories.filter(c => c.limit > 0), tot = sum(base, c => c.limit) || 1;
   let acc_ = 0; base.forEach((c, i) => { c.limit = i === base.length - 1 ? Math.round((L - acc_) * 100) / 100 : Math.round(c.limit / tot * L); acc_ += c.limit; });
-  const sal = parseMoney(f.get('salary'));
-  if (sal > 0 && !S.fixed.some(x => x.kind === 'entra')) S.fixed.push({ id: uid(), kind: 'entra', name: 'Salário', amount: sal, day: Math.min(31, Math.max(1, parseInt(f.get('day')) || 5)), catId: '', accId: S.defaultAcc, since: curKey() });
-  save(); ui.ob = 2; render();
+  d.incomes.forEach(r => { const v = parseMoney(r.amount); if (v > 0) S.fixed.push({ id: uid(), kind: 'entra', name: (r.name || 'Renda').trim(), amount: v, rule: r.rule, day: Math.min(31, Math.max(1, parseInt(r.day) || 5)), sat: true, accId: S.defaultAcc, since: curKey() }); });
+  const sv = parseMoney(d.saved);
+  if (sv > 0) { const nb = { id: uid(), name: 'Reserva', icon: '🐷', accId: d.savedAcc, rateType: 'cdi', rate: String(d.savedRate || '100').replace(',', '.') }; S.boxes = [nb]; S.moves = [{ id: uid(), boxId: nb.id, type: 'ini', amount: sv, date: todayISO(), note: 'Saldo inicial' }]; }
+  ui.obd = null; save(); ui.ob = 2; render();
 });
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.dataset.ob) { obData()[t.dataset.ob] = t.value; return; }
+  if (t.dataset.obi) { const r = obData().incomes[+t.dataset.obi]; r[t.dataset.k] = t.value; if (t.dataset.k === 'rule') render(); return; }
   if (t.id === 'q') { ui.q = t.value; const pos = t.selectionStart; render(); const n = $('#q'); n.focus(); try { n.setSelectionRange(pos, pos); } catch (er) { } return; }
   if (draft && t.id === 'dNote') draft.note = t.value;
   if (draft && t.id === 'dDate' && t.value) draft.date = t.value;
   if (petEdit && t.dataset.pk) { petEdit.p[t.dataset.pk] = t.value; const pv = $('.pet-prev'); if (pv) pv.firstElementChild.outerHTML = byunSVG('normal', petEdit.p); }
-  if (t.dataset.setv) { S[t.dataset.setv] = t.dataset.setv === 'housingRef' ? (parseInt(t.value) || 30) : t.value; save(); }
+  if (t.dataset.setv) { S[t.dataset.setv] = t.dataset.setv === 'cdi' ? (parseFloat(t.value.replace(',', '.')) || 0) : t.value; save(); }
 });
 document.addEventListener('change', e => {
   const t = e.target;
@@ -1175,7 +1469,7 @@ document.addEventListener('scroll', e => {
 
 /* ---------- olhos que seguem o dedo/cursor ---------- */
 function look(x, y) {
-  if (!S.follow) return;
+  if (S.motion !== 'follow') return;
   document.querySelectorAll('.byun').forEach(svg => {
     const r = svg.getBoundingClientRect(); if (!r.width) return;
     const cx = r.left + r.width / 2, cy = r.top + r.height * .6;

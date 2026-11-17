@@ -289,22 +289,13 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 @keyframes float{50%{transform:translateY(-6px)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-/* telas largas: vira painel em colunas, igual dashboard */
-@media (min-width:900px){
-  #app{max-width:1180px;padding-left:28px;padding-right:28px}
-  .home-grid{display:grid;grid-template-columns:380px minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
-  .home-grid .col{display:flex;flex-direction:column}
-  .charts-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
-  .charts-grid .wide{grid-column:1/-1}
-  .kpis{grid-template-columns:repeat(4,1fr)}
-  .plan-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
-}
+
 
 /* mascote */
 .pet-prev{background:var(--card);border-radius:24px;padding:18px 0 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
 .pet-prev .byun{width:150px}
 .pet-prev span{font-size:11.5px;color:var(--muted)}
-.species{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.species{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .species button{border:2px solid transparent;background:var(--card);border-radius:16px;padding:8px 4px 6px;font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ink2)}
 .species button i{width:52px;display:block}
 .species button.on{border-color:var(--ink);color:var(--ink)}
@@ -316,5 +307,53 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .custom-c input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
 .card .btn.ghost{background:var(--card2);border:1px solid var(--line)}
 /* no escuro, um círculo suave atrás do mascote (sem contorno) */
-:root[data-theme="dark"] .gauge:before{content:'';position:absolute;left:50%;top:40px;width:152px;height:152px;margin-left:-76px;border-radius:50%;background:var(--card)}
+:root[data-theme="dark"] .gauge.pet-light:before{content:'';position:absolute;left:50%;top:36px;width:160px;height:160px;margin-left:-80px;border-radius:50%;background:#fff}
 .gauge .byun-wrap{z-index:1}
+
+/* fundo branco atrás de mascote escuro no modo escuro */
+.pet-mini.pet-light,.logo-wrap.pet-light{background:#fff;border-radius:50%;padding:8px}
+.logo-wrap.pet-light{padding:12px}
+.pet-prev.pet-light{background:#fff}
+.pet-prev.pet-light span{color:#8b8a85}
+.species button i.pet-light{background:#fff;border-radius:50%;padding:4px}
+/* grupos de botões */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+.trio .btn,.duo .btn{height:44px;font-size:13.5px;margin-top:8px}
+.ob-box{background:var(--card);border-radius:18px;padding:14px;margin-bottom:10px}
+.ob-box .radios span{padding:8px 12px;font-size:13px}
+.ob form .btn.ghost{margin-top:4px}
+/* layout em colunas sem buracos */
+.masonry>*{break-inside:avoid;-webkit-column-break-inside:avoid}
+@media (min-width:760px){
+  #app{max-width:920px;padding-left:24px;padding-right:24px}
+  .masonry{column-count:2;column-gap:14px}
+  .masonry>.card{display:inline-block;width:100%}
+  .kpis{grid-template-columns:repeat(4,1fr)}
+  .narrow{max-width:640px;margin:0 auto}
+}
+@media (min-width:1100px){
+  #app{max-width:1340px;padding-left:124px;padding-right:36px;padding-bottom:40px}
+  .home-grid{display:grid;grid-template-columns:400px minmax(0,1fr);gap:16px;align-items:start}
+  .home-grid .side{position:sticky;top:12px}
+  .nav{left:28px;top:50%;bottom:auto;transform:translateY(-50%);flex-direction:column;width:auto;gap:8px;padding:10px 8px;border-radius:32px}
+  .nav button{width:48px;height:48px}
+  .toast{top:20px}
+}
+@media (min-width:1500px){ .home-grid .masonry{column-count:3} }
+
+/* sugestões de emoji */
+.emoji-sug{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.emoji-sug button{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-size:22px;display:grid;place-items:center;padding:0}
+.emoji-sug button.on{border:2px solid var(--ink)}
+.switch.off{opacity:.55}
+/* cofrinho no topo */
+.box-pill{margin-top:10px;border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+.box-pill span{color:var(--green);font-weight:700}
+.card.flash{animation:flash 1s}
+@keyframes flash{0%,100%{box-shadow:0 0 0 0 transparent}30%{box-shadow:0 0 0 3px var(--green)}}
+/* Byun pulandinho */
+.byun-wrap.bounce .byun{animation:hop 1.6s cubic-bezier(.3,0,.3,1) infinite;transform-origin:50% 100%}
+.byun-wrap.bounce:after{content:'';position:absolute;left:50%;bottom:-6px;width:90px;height:10px;margin-left:-45px;border-radius:50%;background:rgba(0,0,0,.12);animation:shadow 1.6s cubic-bezier(.3,0,.3,1) infinite;z-index:-1}
+@keyframes hop{0%,100%{transform:translateY(0) scale(1.04,.96)}12%{transform:translateY(0) scale(.97,1.03)}40%{transform:translateY(-22px) scale(1,1)}68%{transform:translateY(0) scale(1.06,.94)}80%{transform:translateY(0) scale(1,1)}}
+@keyframes shadow{0%,100%,68%{transform:scale(1);opacity:1}40%{transform:scale(.6);opacity:.5}}
