@@ -250,9 +250,9 @@ function boxesInfo(m = ui.month) {
 
 /* ---------- cálculos do mês ---------- */
 function extrasFor(m) { return S.extras.filter(e => e.recurring ? (!e.since || e.since <= m) : e.month === m); }
-// a fatura recebe o nome do mês em que VENCE:
+// Fatura = mês em que VENCE (ex.: fecha 25, vence 2: compras de 26/10 a 25/11 = fatura de dezembro, vence 02/12).
 // 1) compra depois do dia de fechamento vai pro ciclo seguinte
-// 2) se o vencimento é num dia menor ou igual ao fechamento (ex.: fecha 26, vence 2), ele cai no mês seguinte ao fechamento
+// 2) se o vencimento é num dia menor ou igual ao fechamento, ele cai no mês seguinte ao fechamento
 function invMonth(t, a) {
   const d = +t.date.slice(8), C = +a.closing || 0, V = +a.due || 0;
   let k = t.date.slice(0, 7);
@@ -260,7 +260,10 @@ function invMonth(t, a) {
   if (C && V && V <= C) k = addMonths(k, 1);
   return k;
 }
-const dueDate = (a, m) => `${pad(Math.min(+a.due || 10, dim(m)))}/${m.slice(5)}`;
+const dueDate = (a, k) => `${pad(Math.min(+a.due || 10, dim(k)))}/${k.slice(5)}`;
+const invoiceDueIn = (a, m) => m;   // a fatura de um mês é a que vence nele
+// gasto no crédito conta no mês da fatura; débito/pix no mês da compra
+function txMonth(t) { const a = acc(t.accId); return t.type === 'gasto' && isCredit(a) ? invMonth(t, a) : t.date.slice(0, 7); }
 function invoice(a, m) { return sum(S.tx.filter(t => t.accId === a.id && t.type === 'gasto' && invMonth(t, a) === m)); }
 function cardOpenMonth(a) { return invMonth({ date: todayISO() }, a); }
 function cardFree(a) {
@@ -270,7 +273,7 @@ function cardFree(a) {
 }
 
 function info(m = ui.month) {
-  const tx = S.tx.filter(t => t.date.slice(0, 7) === m);
+  const tx = S.tx.filter(t => txMonth(t) === m);
   const gastos = tx.filter(t => t.type === 'gasto' && !t.fixedId), receitas = tx.filter(t => t.type === 'receita');   // contas fixas lançadas não entram no dia a dia
   const gasto = sum(gastos), receita = sum(receitas);
   const limit = sum(S.categories, c => c.limit);
@@ -594,8 +597,8 @@ function billsList(N) {
   // fixos no cartão já estão dentro da fatura, então não aparecem duas vezes
   const items = N.fixOutList.filter(f => !isCredit(acc(f.accId))).map(f => { const t = fixedTx(f, N.m); return { id: f.id, tx: t?.id, open: t ? `editTx|${t.id}` : `editFixed|${f.id}`, paid: t ? isPaid(t) : N.paid.includes(f.id), name: f.name, amount: t ? t.amount : f.amount, day: +f.day || 1, icon: cat(f.catId)?.icon || '📌', sub: acc(f.accId)?.name || 'fixo' }; });
   S.accounts.filter(isCredit).forEach(a => {
-    const v = invoice(a, N.m);
-    if (v > 0) items.push({ id: 'card:' + a.id, open: `invoice|${a.id}|${N.m}`, paid: N.paid.includes('card:' + a.id), name: 'Fatura ' + a.name, amount: v, day: +a.due || 10, icon: '💳', sub: 'compras e fixos do cartão' });
+    const k = invoiceDueIn(a, N.m), v = invoice(a, k);
+    if (v > 0) items.push({ id: `card:${a.id}@${k}`, open: `invoice|${a.id}|${k}`, paid: (S.fixedPaid[k] || []).includes('card:' + a.id), name: `Fatura ${a.name}`, amount: v, day: Math.min(+a.due || 10, dim(N.m)), icon: '💳', sub: 'compras e fixos do cartão' });
   });
   return items.sort((a, b) => a.day - b.day);
 }
@@ -835,7 +838,8 @@ function chartsView() {
   const N = info(), P = info(addMonths(ui.month, -1));
   const delta = P.gasto > 0 ? (N.gasto - P.gasto) / P.gasto * 100 : null;
   const biggest = [...N.gastos].sort((a, b) => b.amount - a.amount)[0];
-  const daily = Array.from({ length: N.D }, (_, i) => sum(N.gastos.filter(t => +t.date.slice(8) === i + 1)));
+  const dayOf = t => t.date.slice(0, 7) === N.m ? +t.date.slice(8) : 1;   // compra do ciclo anterior do cartão entra no dia 1
+  const daily = Array.from({ length: N.D }, (_, i) => sum(N.gastos.filter(t => dayOf(t) === i + 1)));
   const maxDay = daily.indexOf(Math.max(...daily));
   const wd = [0, 0, 0, 0, 0, 0, 0]; N.gastos.forEach(t => { const [y, m, d] = t.date.split('-').map(Number); wd[new Date(y, m - 1, d).getDay()] += t.amount; });
   const WD = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
@@ -1510,7 +1514,7 @@ document.addEventListener('click', e => {
     case 'accF': ui.accF = ui.accF === v ? null : v; render(); break;
     case 'catF': ui.catF = ui.catF === v ? null : v; render(); break;
     case 'payDay': ui.payDay = ui.payDay === +v ? null : +v; render(); break;
-    case 'pay': { const m = ui.month; const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(v); const on = i < 0; if (!on) p.splice(i, 1); else { p.push(v); toast('Marcado como pago'); }
+    case 'pay': { let m = ui.month, key = v; if (v.includes('@')) { [key, m] = v.split('@'); } const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(key); const on = i < 0; if (!on) p.splice(i, 1); else { p.push(key); toast('Marcado como pago'); } v = key;
       if (v.startsWith('card:')) { const a = acc(v.slice(5)); if (a) S.tx.forEach(t => { if (t.accId === a.id && t.type === 'gasto' && invMonth(t, a) === m) t.paid = on; }); }
       save(); render(); break; }
     case 'paidTx': { const t = S.tx.find(x => x.id === v); if (t) { t.paid = !isPaid(t);
