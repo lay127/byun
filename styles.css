@@ -565,3 +565,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
   .side .hero-card .label{margin-top:6px}
   .side .hero-card .qa{margin:16px 0 0!important;padding-bottom:16px}
 }
+@media (min-width:1100px){
+  .side .hero-card .qa{padding-bottom:8px}
+  .side>.card{padding-bottom:12px}
+}
