@@ -991,7 +991,7 @@ let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(dra
 function planView() {
   const N = info();
   const fIn = S.fixed.filter(f => f.kind === 'entra'), fOut = S.fixed.filter(f => f.kind === 'sai');
-  const fixRow = f => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">${esc(f.kind === 'entra' ? '💰' : cat(f.catId)?.icon || '📌')}</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${f.kind === 'entra' ? `${ruleLabel(f)} · ${shortDate(payDate(f, ui.month))}` : `dia ${pad(f.day || 1)}`}${acc(f.accId) ? ' · ' + esc(acc(f.accId).name) : ''}${cat(f.catId) && f.kind === 'sai' ? ' · ' + esc(cat(f.catId).name) : ''}</div></div><div class="v ${f.kind === 'entra' ? 'pos' : ''}">${f.kind === 'entra' ? '+' : '-'}${fmt(f.amount)}</div></div>`;
+  const fixRow = f => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">${esc(f.kind === 'entra' ? '💰' : cat(f.catId)?.icon || '📌')}</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${f.kind === 'entra' ? `${ruleLabel(f)} · ${shortDate(payDate(f, ui.month))}` : `dia ${pad(f.day || 1)}`}${acc(f.accId) ? ' · ' + esc(acc(f.accId).name) : ''}${cat(f.catId) && f.kind === 'sai' ? ' · ' + esc(cat(f.catId).name) : ''}</div></div><div class="v ${f.kind === 'entra' ? 'pos' : ''}">${f.kind === 'entra' ? '+' : '-'}${fmt(f.amount)}</div>${ic('right', 'i chev')}</div>`;
   return topbar() + `<h1>Planejar</h1><div class="masonry">
     <section class="card">
       <div class="card-h"><span class="t">${ic('repeat')} Rendas e contas fixas</span></div>
@@ -1274,7 +1274,7 @@ function fixedForm(f, kind) {
 }
 function incomeForm(f) {
   openForm({
-    title: f ? 'Editar renda' : 'Nova renda', values: f ? { ...f, sat: f.sat !== false } : { rule: 'util5', day: 5, sat: true, accId: S.defaultAcc },
+    title: f ? 'Editar renda' : 'Nova renda', values: f ? { ...f, rule: f.rule || 'dia', sat: f.sat !== false } : { rule: 'util5', day: 5, sat: true, accId: S.defaultAcc },
     fields: [
       { key: 'name', label: 'Nome', ph: 'Ex.: Salário, Estágio, Freela fixo', req: true, max: 40 },
       { key: 'amount', label: 'Valor por mês', type: 'money', req: true },
