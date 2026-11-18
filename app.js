@@ -108,6 +108,7 @@ const I = {
   eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
@@ -507,7 +508,7 @@ function render() {
   if (CLOUD && (!user || ui.auth)) { app.innerHTML = authView(); return; }
   if (CLOUD && isAdmin) { app.innerHTML = adminView(); return; }
   if (!S.onboarded) { app.innerHTML = onboarding(); return; }
-  const views = { home: homeView, tx: txView, charts: chartsView, plan: planView, settings: settingsView, install: installView };
+  const views = { cardsFull: cardsFullView, boxesFull: boxesFullView, home: homeView, tx: txView, charts: chartsView, plan: planView, settings: settingsView, install: installView };
   app.innerHTML = (views[ui.view] || homeView)() + nav();
   requestAnimationFrame(drawCharts);
 }
@@ -652,7 +653,7 @@ function cardsCard() {
   const nexts = [0, 1, 2].map(i => addMonths(open, i));
   const fechada = a.closing && +todayISO().slice(8) > a.closing;
   return `<section class="card">
-    <div class="card-h"><span class="t">${ic('card')} Cartões</span><span class="muted" style="font-size:12px">${ui.card + 1} de ${cards.length}</span></div>
+    <div class="card-h"><span class="t">${ic('card')} Cartões</span><span class="muted" style="font-size:12px">${ui.card + 1} de ${cards.length}</span><button class="expand" data-a="go" data-v="cardsFull" aria-label="Abrir em tela cheia">${ic('expand')}</button></div>
     <div class="sub">Fatura de ${monthName(open).toLowerCase()}</div>
     <div class="saldo-big" style="font-size:28px;margin-bottom:12px">${money(invoice(a, open))}</div>
     <div class="cards-scroll" id="cardScroll">
@@ -669,7 +670,9 @@ function cardsCard() {
 }
 function invoiceSheet(accId, m) {
   const a = acc(accId); if (!a) return;
-  m = m || cardOpenMonth(a);
+  openSheet(sheetHead(esc(a.name)) + invoiceBody(a, m || cardOpenMonth(a), false));
+}
+function invoiceBody(a, m, full) {
   const list = S.tx.filter(t => t.accId === a.id && t.type === 'gasto' && invMonth(t, a) === m).sort((x, y) => y.date.localeCompare(x.date) || (y.at || 0) - (x.at || 0));
   const total = sum(list);
   const months = [-1, 0, 1, 2, 3].map(i => addMonths(cardOpenMonth(a), i));
@@ -677,14 +680,29 @@ function invoiceSheet(accId, m) {
   const byCat = {}; list.forEach(t => { const c = cat(t.catId); const k = c ? c.id : '_'; (byCat[k] = byCat[k] || { c, v: 0 }).v += t.amount; });
   const cats = Object.values(byCat).sort((x, y) => y.v - x.v);
   const paidKey = 'card:' + a.id, paid = (S.fixedPaid[m] || []).includes(paidKey);
-  openSheet(sheetHead(esc(a.name)) + `
-    <div class="chips inv-months">${months.map(k => `<button class="chip ${k === m ? 'on' : ''}" data-a="invoice" data-v="${a.id}|${k}">${MES3[+k.slice(5) - 1]}${k.slice(0, 4) !== curKey().slice(0, 4) ? ' ' + k.slice(2, 4) : ''}</button>`).join('')}</div>
+  const used = sum(S.tx.filter(t => t.accId === a.id && t.type === 'gasto' && invMonth(t, a) >= cardOpenMonth(a) && !isPaid(t)));
+  return `
+    <div class="chips inv-months">${months.map(k => `<button class="chip ${k === m ? 'on' : ''}" data-a="${full ? 'fullInv' : 'invoice'}" data-v="${a.id}|${k}">${MES3[+k.slice(5) - 1]}${k.slice(0, 4) !== curKey().slice(0, 4) ? ' ' + k.slice(2, 4) : ''}</button>`).join('')}</div>
     <div class="sub" style="margin-top:6px">Fatura de ${monthName(m).toLowerCase()} · vence ${dueDate(a, m)}${paid ? ' · <b class="pos">paga</b>' : ''}</div>
     <div class="saldo-big">${money(total)}</div>
     ${cats.length > 1 ? `<div class="chips" style="margin-top:10px">${cats.map(x => `<span class="chip">${esc(x.c?.icon || '📦')} ${fmt0(x.v)}</span>`).join('')}</div>` : ''}
+    ${full && +a.limit > 0 ? `<div class="flabel">Limite</div><div class="prog" style="height:10px"><i class="${used > a.limit ? 'over' : ''}" style="width:${Math.min(100, used / a.limit * 100)}%"></i></div><div class="sub" style="display:flex;justify-content:space-between;margin-top:6px"><span>usado ${fmt(used)}</span><span>livre ${fmt(cardFree(a))} de ${fmt0(a.limit)}</span></div>` : ''}
     <div class="flabel">${list.length} ${list.length === 1 ? 'compra' : 'compras'} nessa fatura</div>
     ${list.length ? `<div class="card" style="padding:4px 16px;margin:0">${list.map(txRow).join('')}</div>` : '<div class="empty">Nada nessa fatura.</div>'}
-    <button class="btn ghost" data-a="editAcc" data-v="${a.id}">Editar cartão</button>`);
+    <button class="btn ghost" data-a="editAcc" data-v="${a.id}">Editar cartão</button>`;
+}
+/* tela cheia: cartões */
+function cardsFullView() {
+  const cards = S.accounts.filter(isCredit);
+  if (!cards.length) return topbar('Cartões') + `<div class="empty" style="margin-top:40px"><b>Nenhum cartão de crédito</b>Cadastre um pra acompanhar faturas e limite.</div><button class="btn" data-a="newAcc" data-v="credito">Adicionar cartão</button>`;
+  const a = cards.find(c => c.id === ui.fullCard) || cards[0]; ui.fullCard = a.id;
+  const m = ui.fullInvM && ui.fullInvAcc === a.id ? ui.fullInvM : cardOpenMonth(a);
+  return topbar('Cartões') + `<div class="narrow">
+    <div class="cards-grid">${cards.map(c => `<div class="ccard ${c.id === a.id ? 'sel' : 'dim'}" data-a="fullCard" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
+      <div class="top-r"><span>${esc(c.name)}</span><span class="st">${fmt(invoice(c, cardOpenMonth(c)))}</span></div><div class="chip-i"></div>
+      <div class="bot"><div>Vence<b>${dueDate(c, cardOpenMonth(c))}</b></div><div style="text-align:right">Limite livre<b>${fmt(cardFree(c))}</b></div></div></div>`).join('')}
+      <div class="ccard add" data-a="newAcc" data-v="credito">+ Novo cartão</div></div>
+    <section class="card" style="margin-top:14px"><div class="card-h"><span class="t">${ic('card')} ${esc(a.name)}</span></div>${invoiceBody(a, m, true)}</section></div>`;
 }
 function shade(hex) {
   const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
@@ -699,7 +717,7 @@ function boxCard(N) {
     <div class="empty"><b>Quanto você tem guardado?</b>Crie uma caixinha pra acompanhar a reserva e ver quanto ela rende.</div>
     <button class="btn" data-a="newBox">${ic('plus')} Criar caixinha</button></section>`;
   return `<section class="card" id="cofrinho">
-    <div class="card-h"><span class="t">${ic('piggy')} Cofrinho</span><button class="link" data-a="newBox">Caixinha ${ic('plus')}</button></div>
+    <div class="card-h"><span class="t">${ic('piggy')} Cofrinho</span><button class="expand" data-a="go" data-v="boxesFull" aria-label="Abrir em tela cheia">${ic('expand')}</button><button class="link" data-a="newBox">Caixinha ${ic('plus')}</button></div>
     <div class="sub">Dinheiro guardado</div>
     <div class="saldo-big">${money(BX.total)}</div>
     <div style="font-size:12.5px;margin-top:4px"><b class="pos">+${fmt(BX.est)}</b> <span class="muted">de rendimento estimado em ${monthName(N.m).toLowerCase()}</span></div>
@@ -753,15 +771,36 @@ function boxSheet(id) {
   const bal = boxBal(b), est = bal * monthlyRate(b);
   const mv = S.moves.filter(m => m.boxId === id).sort((x, y) => y.date.localeCompare(x.date)).slice(0, 30);
   const lab = { ini: 'Saldo inicial', dep: 'Guardou', ret: 'Retirou', rend: 'Rendimento' };
-  openSheet(sheetHead(`${esc(b.icon || '🐷')} ${esc(b.name)}`) + `
+  openSheet(sheetHead(`${esc(b.icon || '🐷')} ${esc(b.name)}`) + boxBody(b));
+}
+function boxBody(b, full) {
+  const id = b.id, bal = boxBal(b), est = bal * monthlyRate(b);
+  const mv = S.moves.filter(m => m.boxId === id).sort((x, y) => y.date.localeCompare(x.date)).slice(0, full ? 12 : 30);
+  const lab = { ini: 'Saldo inicial', dep: 'Guardou', ret: 'Retirou', rend: 'Rendimento' };
+  return `
     <div class="saldo-big">${money(bal)}</div>
     <div class="sub">${acc(b.accId) ? esc(acc(b.accId).name) + ' · ' : ''}${rateLabel(b)} · rende ~${fmt(est)} por mês</div>
     <div class="trio"><button class="btn ghost" data-a="move" data-v="dep" data-b="${id}">Guardar</button><button class="btn ghost" data-a="move" data-v="ret" data-b="${id}">Retirar</button><button class="btn ghost" data-a="move" data-v="rend" data-b="${id}">Rendeu</button></div>
     <button class="btn ghost" data-a="fixBal" data-v="${id}">Atualizar com o saldo do banco</button>
     <div class="flabel">Histórico</div>
     ${mv.length ? mv.map(m => `<div class="row tap" data-a="delMove" data-v="${m.id}"><div class="l"><div class="n">${lab[m.type]}${m.note && m.type !== 'ini' ? ' · ' + esc(m.note) : ''}</div><div class="d">${dayLabel(m.date)}</div></div><div class="v ${m.type === 'ret' ? '' : 'pos'}">${m.type === 'ret' ? '-' : '+'}${fmt(Math.abs(m.amount))}</div></div>`).join('') : '<div class="empty">Sem movimentos.</div>'}
+    ${b.goal > 0 ? `<div class="flabel">Meta</div><div class="prog" style="height:10px"><i style="width:${Math.min(100, bal / b.goal * 100)}%;background:var(--s7)"></i></div><div class="sub" style="margin-top:6px">${pct(bal, b.goal)}% de ${fmt0(b.goal)} · faltam ${fmt(Math.max(0, b.goal - bal))}</div>` : ''}
     <div class="sub" style="margin-top:8px">Toque num movimento pra apagar.</div>
-    <button class="btn ghost" data-a="editBox" data-v="${id}">Editar caixinha</button>`);
+    <button class="btn ghost" data-a="editBox" data-v="${id}">Editar caixinha</button>`;
+}
+function boxesFullView() {
+  const BX = boxesInfo(ui.month);
+  const ks = [-5, -4, -3, -2, -1, 0].map(i => addMonths(ui.month, i));
+  CH = { boxes: { labels: ks.map(k => MES3[+k.slice(5) - 1]), series: [{ name: 'Guardado', color: 'var(--s7)', values: ks.map(k => sum(S.boxes || [], b => boxBal(b, k + '-31'))) }], tipLabel: i => monthName(ks[i]) + ' ' + ks[i].slice(0, 4) } };
+  return topbar('Cofrinho') + `<div class="narrow">
+    <section class="card"><div class="sub">Dinheiro guardado</div><div class="big" style="text-align:left">${money(BX.total)}</div>
+      <div style="font-size:13px;margin-top:4px"><b class="pos">+${fmt(BX.est)}</b> <span class="muted">de rendimento estimado em ${monthName(ui.month).toLowerCase()}</span></div>
+      <div class="kpis two"><div class="kpi"><div class="k">Guardou no mês</div><div class="v">${fmt(BX.dep)}</div></div><div class="kpi"><div class="k">Rendeu no mês</div><div class="v pos">${fmt(BX.rend)}</div></div></div>
+      <div class="trio"><button class="btn ghost" data-a="move" data-v="dep">Guardar</button><button class="btn ghost" data-a="move" data-v="ret">Retirar</button><button class="btn ghost" data-a="move" data-v="rend">Rendeu</button></div>
+      <button class="btn" data-a="newBox">${ic('plus')} Nova caixinha</button></section>
+    ${(S.boxes || []).length ? `<section class="card"><div class="card-h"><span class="t">${ic('trend')} Evolução</span></div><div class="chart" data-chart="boxes"></div></section>` : ''}
+    ${(S.boxes || []).map(b => `<section class="card"><div class="card-h"><span class="t">${esc(b.icon || '🐷')} ${esc(b.name)}</span></div>${boxBody(b, true)}</section>`).join('')}
+  </div>`;
 }
 
 function extrasCard(N) {
@@ -1617,11 +1656,13 @@ document.addEventListener('click', e => {
     case 'newBox': boxForm(); break;
     case 'editBox': { const b = box(v); closeSheet(); boxForm(b); break; }
     case 'openBox': boxSheet(v); break;
+    case 'fullCard': ui.fullCard = v; ui.fullInvM = null; render(); break;
+    case 'fullInv': { const [id, m] = v.split('|'); ui.fullCard = id; ui.fullInvAcc = id; ui.fullInvM = m; render(); break; }
     case 'invoice': { const [id, m] = v.split('|'); invoiceSheet(id, m); break; }
     case 'goBoxes': { const c = $('#cofrinho'); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.classList.remove('flash'); c.offsetWidth; c.classList.add('flash'); } break; }
     case 'move': { const b = el.dataset.b; closeSheet(); moveForm(v, b); break; }
     case 'fixBal': { const b = box(v); closeSheet(); openForm({ title: 'Atualizar saldo', saveLabel: 'Atualizar', values: { real: boxBal(b) }, fields: [{ key: 'real', label: `Quanto tem hoje em ${b.name}?`, type: 'money', hint: 'Olhe no app do banco. A diferença entra como rendimento.' }], onSave: x => { const diff = Math.round((x.real - boxBal(b)) * 100) / 100; if (diff) S.moves.push({ id: uid(), boxId: b.id, type: 'rend', amount: diff, date: todayISO(), note: 'Ajuste pelo saldo do banco' }); toast('Saldo atualizado'); } }); break; }
-    case 'delMove': if (el.dataset.sure) { const m = S.moves.find(x => x.id === v); S.moves = S.moves.filter(x => x.id !== v); save(); closeSheet(); render(); if (m) boxSheet(m.boxId); } else { el.dataset.sure = 1; el.querySelector('.n').textContent = 'Toque de novo pra apagar'; } break;
+    case 'delMove': if (el.dataset.sure) { const m = S.moves.find(x => x.id === v); S.moves = S.moves.filter(x => x.id !== v); save(); closeSheet(); render(); if (m && ui.view !== 'boxesFull') boxSheet(m.boxId); } else { el.dataset.sure = 1; el.querySelector('.n').textContent = 'Toque de novo pra apagar'; } break;
     case 'obAddIncome': obData().incomes.push({ name: '', amount: '', rule: 'util5', day: '5' }); render(); break;
     case 'obDelIncome': obData().incomes.splice(+v, 1); render(); break;
     case 'editFixed': closeSheet(); fixedForm(S.fixed.find(x => x.id === v)); break;

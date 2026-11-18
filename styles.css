@@ -425,3 +425,13 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .label .eye-btn svg{width:15px;height:15px}
 
 .row.in-fat .v{color:var(--muted);font-weight:600}
+
+/* telas cheias de cartões e cofrinho */
+.expand{border:0;background:var(--card2);color:var(--ink2);width:32px;height:32px;border-radius:50%;display:grid;place-items:center;padding:0;flex:none;order:3}
+.expand svg{width:16px;height:16px}
+.card-h .muted{order:2}
+.cards-grid{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 8px;scrollbar-width:none}
+.cards-grid::-webkit-scrollbar{display:none}
+.cards-grid .ccard{scroll-snap-align:start;transition:opacity .2s,transform .2s}
+.cards-grid .ccard.dim{opacity:.55;transform:scale(.96)}
+@media (min-width:760px){.cards-grid{flex-wrap:wrap;overflow:visible}}
