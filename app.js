@@ -1170,7 +1170,7 @@ function partsBlock(d) {
   if (t.owedBy && t.owedBy.name) {
     const ol = oweLeft(t), op = t.owedBy.parts || [];
     h += `<div class="parts"><div class="parts-h"><b>${esc(t.owedBy.name)} pagando em partes</b><span>${ol <= 0 ? 'recebido ✓' : `recebido ${fmt(partsSum(op))} · falta ${fmt(ol)}`}</span></div>
-      ${op.map(p => `<div class="part-row"><span>recebido em ${dayLabel(p.date)}</span><b class="pos">+${fmt(p.amount)}</b></div>`).join('')}
+      ${op.map(p => `<div class="part-row"><span>recebido em ${dayLabel(p.date)}</span><b class="pos">+${fmt(p.amount)}</b><button class="link" data-a="delRecv" data-v="${p.id}">desfazer</button></div>`).join('')}
       ${ol > 0 ? `<div class="part-add"><input id="dRecvAmt" class="inp" inputmode="decimal" placeholder="Valor"><input id="dRecvDate" class="inp" type="date" value="${todayISO()}" aria-label="Quando recebeu"><button class="btn green" data-a="dRecv">Recebi</button></div><span class="hint">O valor volta como receita na sua conta.</span>` : ''}</div>`;
   }
   return h;
@@ -1561,6 +1561,7 @@ document.addEventListener('click', e => {
       save(); render(); break; }
     case 'dPart': { const t = S.tx.find(x => x.id === draft.editId); const amt = parseMoney($('#dPartAmt').value); if (!t || !amt) { toast('Digite o valor pago'); break; } payPart(t, amt, $('#dPartDate').value || todayISO()); draft.paid = isPaid(t); save(); renderAdd(); render(); break; }
     case 'dRecv': { const t = S.tx.find(x => x.id === draft.editId); const amt = parseMoney($('#dRecvAmt').value); if (!t || !amt) { toast('Digite o valor recebido'); break; } receivePart(t, amt, $('#dRecvDate').value || todayISO()); draft.owe.received = !!t.owedBy.received; save(); renderAdd(); render(); break; }
+    case 'delRecv': { const t = S.tx.find(x => x.id === draft.editId); const o = t?.owedBy; if (o) { const p = (o.parts || []).find(x => x.id === v); o.parts = (o.parts || []).filter(x => x.id !== v); if (p?.txId) S.tx = S.tx.filter(x => x.id !== p.txId); if (oweLeft(t) > 0) o.received = false; draft.owe.received = !!o.received; save(); renderAdd(); render(); toast('Recebimento desfeito'); } break; }
     case 'delPart': { const t = S.tx.find(x => x.id === draft.editId); if (t) { t.parts = (t.parts || []).filter(p => p.id !== v); if (leftToPay(t) > 0) { t.paid = false; delete t.paidAt; } draft.paid = isPaid(t); save(); renderAdd(); render(); } break; }
     case 'paidTx': { const t = S.tx.find(x => x.id === v); if (t) { t.paid = !isPaid(t); if (!t.paid) { t.parts = []; delete t.paidAt; } else t.paidAt = todayISO();
       if (t.fixedId) { const m = t.date.slice(0, 7); const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(t.fixedId); if (t.paid && i < 0) p.push(t.fixedId); if (!t.paid && i >= 0) p.splice(i, 1); }
