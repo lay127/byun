@@ -493,8 +493,9 @@ function topbar(title) {
     <div class="tr"><button class="icon-btn flat" data-a="hide" aria-label="${HIDE ? 'Mostrar valores' : 'Esconder valores'}">${ic(HIDE ? 'eyeOff' : 'eye')}</button><button class="icon-btn" data-a="go" data-v="settings" aria-label="Ajustes">${ic('gear')}</button></div></div>`;
 }
 function nav() {
-  const b = (v, i, l) => `<button class="${ui.view === v ? 'on' : ''}" data-a="go" data-v="${v}" aria-label="${l}">${ic(i)}</button>`;
-  return `<nav class="nav">${b('home', 'home', 'Início')}${b('tx', 'list', 'Transações')}<button class="plus" data-a="add" data-v="gasto" aria-label="Novo lançamento">${ic('plus')}</button>${b('charts', 'pie', 'Análises')}${b('plan', 'sliders', 'Planejar')}</nav>`;
+  const on = v => ui.view === v || (v === 'home' && (ui.view === 'cardsFull' || ui.view === 'boxesFull'));
+  const b = (v, i, l, x = '') => `<button class="${on(v) ? 'on' : ''} ${x}" data-a="go" data-v="${v}" aria-label="${l}">${ic(i)}<span>${l}</span></button>`;
+  return `<nav class="nav"><div class="brand"><i class="${petCls()}">${byunSVG('happy')}</i><b>Byun</b></div>${b('home', 'home', 'Início')}${b('tx', 'list', 'Transações')}<button class="plus" data-a="add" data-v="gasto" aria-label="Novo lançamento">${ic('plus')}<span>Novo lançamento</span></button>${b('charts', 'pie', 'Análises')}${b('plan', 'sliders', 'Planejar')}${b('settings', 'gear', 'Ajustes', 'only-desk')}</nav>`;
 }
 
 let sortedOnce = false;
@@ -551,8 +552,14 @@ function homeView() {
   </div>`);
 
   return topbar() + `<div class="home-grid">
-    <div class="side">${hero}${withHide('saldo', () => saldoCard(N))}</div>
-    <div class="masonry">${withHide('cofrinho', () => boxCard(N))}${withHide('contas', () => billsCard(N))}${withHide('cartoes', () => cardsCard())}${withHide('recentes', () => recentCard(N))}${withHide('extras', () => extrasCard(N))}</div>
+    <div class="side"><div class="hero-card">${hero}</div></div>
+    <div class="main">
+      <div class="o1">${withHide('saldo', () => saldoCard(N))}</div>
+      <div class="cols">
+        <div class="col">${`<div class="o3">${withHide('cartoes', () => cardsCard())}</div><div class="o4">${withHide('contas', () => billsCard(N))}</div>`}</div>
+        <div class="col">${`<div class="o2">${withHide('cofrinho', () => boxCard(N))}</div><div class="o5">${withHide('recentes', () => recentCard(N))}</div><div class="o6">${withHide('extras', () => extrasCard(N))}</div>`}</div>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -567,6 +574,7 @@ function saldoCard(N) {
   const salPct = N.entra > 0 ? pct(N.sobra, N.entra) : 0;
   return `<section class="card">
     <div class="card-h"><span class="t">${ic('wallet')} Saldo previsto</span>${N.entra > 0 ? `<span class="tag ${N.sobra < 0 ? 'gray' : ''}">${ic(N.sobra < 0 ? 'arrowDown' : 'arrowUp')} ${salPct}% livre</span>` : ''}</div>
+    <div class="saldo-split"><div class="sp-a">
     <div class="saldo-big ${N.sobra < 0 ? 'neg' : ''}">${money(N.sobra)}</div>
     <div class="sub">valor estimado depois de pagar tudo do mês</div>
     <div class="stack">${bar || '<i style="width:100%;background:var(--line)"></i>'}</div>
@@ -576,10 +584,10 @@ function saldoCard(N) {
       <div><span class="dot" style="background:var(--s1)"></span>Dia a dia <b>-${fmt(N.gasto)}</b></div>
       <div><span class="dot" style="background:var(--s4)"></span>Extras <b>-${fmt(N.exOut + N.exSave)}</b></div>
       <div><span class="dot" style="background:var(--s7)"></span>Guardado <b>${N.guard > 0 ? '-' : ''}${fmt(Math.abs(N.guard))}</b></div>
-    </div>
+    </div></div><div class="sp-b">
     ${N.incomes.length ? `<div class="flabel" style="margin-top:16px">Rendas do mês</div>${N.incomes.map(({ f, date }) => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">💰</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${noDate(f) ? 'sem data' : shortDate(date) + ' · ' + ruleLabel(f)}</div></div><div class="v pos">${!noDate(f) && date <= today && N.isCur ? '✓ ' : ''}+${fmt(f.amount)}</div></div>`).join('')}`
       : `<div class="empty" style="padding-bottom:0">Cadastre suas rendas em <button class="link" data-a="newIncome">Nova renda</button> pra ver a sobra real.</div>`}
-  </section>`;
+  </div></div></section>`;
 }
 
 /* contas fixas viram lançamentos em Transações, ligados a Contas a pagar */
@@ -653,7 +661,7 @@ function cardsCard() {
   const nexts = [0, 1, 2].map(i => addMonths(open, i));
   const fechada = a.closing && +todayISO().slice(8) > a.closing;
   return `<section class="card">
-    <div class="card-h"><span class="t">${ic('card')} Cartões</span><span class="muted" style="font-size:12px">${ui.card + 1} de ${cards.length}</span><button class="expand" data-a="go" data-v="cardsFull" aria-label="Abrir em tela cheia">${ic('expand')}</button></div>
+    <div class="card-h"><span class="t">${ic('card')} Cartões</span>${cards.length > 1 ? `<span class="cstep"><button data-a="cardStep" data-v="-1" aria-label="Cartão anterior" ${ui.card === 0 ? 'disabled' : ''}>${ic('left')}</button><span class="muted">${ui.card + 1} de ${cards.length}</span><button data-a="cardStep" data-v="1" aria-label="Próximo cartão" ${ui.card === cards.length - 1 ? 'disabled' : ''}>${ic('right')}</button></span>` : ''}<button class="expand" data-a="go" data-v="cardsFull" aria-label="Abrir em tela cheia">${ic('expand')}</button></div>
     <div class="sub">Fatura de ${monthName(open).toLowerCase()}</div>
     <div class="saldo-big" style="font-size:28px;margin-bottom:12px">${money(invoice(a, open))}</div>
     <div class="cards-scroll" id="cardScroll">
@@ -697,7 +705,7 @@ function cardsFullView() {
   if (!cards.length) return topbar('Cartões') + `<div class="empty" style="margin-top:40px"><b>Nenhum cartão de crédito</b>Cadastre um pra acompanhar faturas e limite.</div><button class="btn" data-a="newAcc" data-v="credito">Adicionar cartão</button>`;
   const a = cards.find(c => c.id === ui.fullCard) || cards[0]; ui.fullCard = a.id;
   const m = ui.fullInvM && ui.fullInvAcc === a.id ? ui.fullInvM : cardOpenMonth(a);
-  return topbar('Cartões') + `<div class="narrow">
+  return topbar('Cartões') + `<div class="narrow full-cards">
     <div class="cards-grid">${cards.map(c => `<div class="ccard ${c.id === a.id ? 'sel' : 'dim'}" data-a="fullCard" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
       <div class="top-r"><span>${esc(c.name)}</span><span class="st">${fmt(invoice(c, cardOpenMonth(c)))}</span></div><div class="chip-i"></div>
       <div class="bot"><div>Vence<b>${dueDate(c, cardOpenMonth(c))}</b></div><div style="text-align:right">Limite livre<b>${fmt(cardFree(c))}</b></div></div></div>`).join('')}
@@ -792,7 +800,7 @@ function boxesFullView() {
   const BX = boxesInfo(ui.month);
   const ks = [-5, -4, -3, -2, -1, 0].map(i => addMonths(ui.month, i));
   CH = { boxes: { labels: ks.map(k => MES3[+k.slice(5) - 1]), series: [{ name: 'Guardado', color: 'var(--s7)', values: ks.map(k => sum(S.boxes || [], b => boxBal(b, k + '-31'))) }], tipLabel: i => monthName(ks[i]) + ' ' + ks[i].slice(0, 4) } };
-  return topbar('Cofrinho') + `<div class="narrow">
+  return topbar('Cofrinho') + `<div class="narrow full-boxes">
     <section class="card"><div class="sub">Dinheiro guardado</div><div class="big" style="text-align:left">${money(BX.total)}</div>
       <div style="font-size:13px;margin-top:4px"><b class="pos">+${fmt(BX.est)}</b> <span class="muted">de rendimento estimado em ${monthName(ui.month).toLowerCase()}</span></div>
       <div class="kpis two"><div class="kpi"><div class="k">Guardou no mês</div><div class="v">${fmt(BX.dep)}</div></div><div class="kpi"><div class="k">Rendeu no mês</div><div class="v pos">${fmt(BX.rend)}</div></div></div>
@@ -1597,6 +1605,7 @@ document.addEventListener('click', e => {
   switch (a) {
     case 'go': ui.view = v; window.scrollTo(0, 0); if (v === 'tx') { ui.accF = ui.catF = null; } render(); break;
     case 'month': ui.month = addMonths(ui.month, +v); ui.msgI = 0; render(); break;
+    case 'cardStep': { const n = S.accounts.filter(isCredit).length; ui.card = Math.max(0, Math.min(n - 1, ui.card + +v)); render(); const sc = $('#cardScroll'); if (sc && sc.firstElementChild) sc.scrollTo({ left: ui.card * (sc.firstElementChild.offsetWidth + 12), behavior: 'smooth' }); break; }
     case 'hideCard': { if (HIDE_CARDS.has(v)) HIDE_CARDS.delete(v); else HIDE_CARDS.add(v); try { localStorage.setItem('byun.hideCards', JSON.stringify([...HIDE_CARDS])); } catch (er) { } render(); break; }
     case 'hide': HIDE = !HIDE; try { localStorage.setItem('byun.hide', HIDE ? '1' : '0'); } catch (er) { } render(); break;
     case 'theme': S.theme = S.theme === 'dark' ? 'light' : 'dark'; save(); render(); break;
@@ -1752,7 +1761,7 @@ document.addEventListener('keydown', e => {
 /* deslizar o carrossel de cartões troca o cartão selecionado */
 document.addEventListener('scroll', e => {
   const sc = e.target; if (!sc || sc.id !== 'cardScroll') return;
-  clearTimeout(sc._t); sc._t = setTimeout(() => { const i = Math.round(sc.scrollLeft / 282); const n = S.accounts.filter(isCredit).length; if (i !== ui.card && i < n) { ui.card = i; const left = sc.scrollLeft; render(); const ns = $('#cardScroll'); if (ns) ns.scrollLeft = left; } }, 140);
+  clearTimeout(sc._t); sc._t = setTimeout(() => { const i = Math.round(sc.scrollLeft / ((sc.firstElementChild?.offsetWidth || 270) + 12)); const n = S.accounts.filter(isCredit).length; if (i !== ui.card && i < n) { ui.card = i; const left = sc.scrollLeft; render(); const ns = $('#cardScroll'); if (ns) ns.scrollLeft = left; } }, 140);
 }, true);
 
 /* ---------- olhos que seguem o dedo/cursor ---------- */
