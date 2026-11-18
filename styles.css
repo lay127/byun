@@ -542,7 +542,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
   .side .saldo-big{font-size:30px}
 }
 @media (min-width:1100px) and (max-width:1379px){ .home-grid .cols{grid-template-columns:minmax(0,1fr)} }
-@media (min-width:1100px) and (max-height:780px){ .side .hero-card .bubble{display:none} }
+@media (min-width:1100px) and (max-height:780px){ .side .hero-card .bubble{font-size:12.5px;padding:7px 12px} .side .hero-card .gauge{transform:scale(.68);margin-bottom:-68px} }
 .legend .leg-inc{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .legend .leg-inc small{display:block;font-size:10.5px;color:var(--muted);margin-top:1px}
 .legend .leg-inc:hover b{text-decoration:underline}
@@ -556,3 +556,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
   .chart.fill{flex:1;min-height:190px;position:relative}
   .chart.fill>svg{position:absolute;top:0;left:0}
 }
+
+/* Byun dando oi quando o app abre */
+.byun-wrap.hello{animation:hello 1.6s cubic-bezier(.3,1.4,.5,1) .15s both}
+@keyframes hello{0%{transform:translateY(16px) scale(.85);opacity:0}25%{transform:translateY(-14px) scale(1.04);opacity:1}40%{transform:translateY(0) scale(1.05,.95)}55%{transform:translateY(-8px) rotate(-6deg)}70%{transform:translateY(0) rotate(5deg)}85%{transform:rotate(-3deg)}100%{transform:none}}

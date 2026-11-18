@@ -212,7 +212,7 @@ async function boot() {
 
 const VIEWS = ['home', 'tx', 'charts', 'plan', 'settings', 'install', 'cardsFull', 'boxesFull'];
 const saved = (() => { try { return JSON.parse(sessionStorage.getItem('byun.ui') || '{}'); } catch (e) { return {}; } })();
-const ui = { view: VIEWS.includes(saved.view) ? saved.view : 'home', month: /^\d{4}-\d{2}$/.test(saved.month || '') ? saved.month : curKey(), txType: 'all', q: '', accF: null, catF: null, msgI: 0, ob: 0, payDay: null, card: 0 };
+const ui = { greet: true, view: VIEWS.includes(saved.view) ? saved.view : 'home', month: /^\d{4}-\d{2}$/.test(saved.month || '') ? saved.month : curKey(), txType: 'all', q: '', accF: null, catF: null, msgI: 0, ob: 0, payDay: null, card: 0 };
 let draft = null, deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; });
 
@@ -348,7 +348,18 @@ const CALMO = {
   angry: ['{categoria} passou do limite.'], sad: ['O mês passou do limite em {excesso}.'], sleepy: ['Você pode gastar {diario} por dia.'],
   future: ['Mês futuro, nada lançado ainda.'], past: ['Mês encerrado com sobra de {sobra}.']
 };
+const OI = {
+  manha: ['Bom dia, {nome}! ☀️ Já tomou café?', 'Bom diaaa! Bora começar o dia no controle 🐾', 'Acordei e vim correndo te ver, {nome}! 💚'],
+  tarde: ['Boa tarde, {nome}! Senti sua falta 💚', 'Oii! Cheguei pra cuidar das contas com você 🐾', 'Boa tarde! Vamos ver como tá o mês? ✨'],
+  noite: ['Boa noite, {nome}! 🌙 Dia corrido?', 'Oi de novo! Vim te fazer companhia 🐾', 'Boa noite! Antes de dormir, uma olhadinha nas contas? 💚'],
+  madru: ['Acordada ainda, {nome}? 🌙 Eu tô aqui', 'Shhh… madrugada é hora de dormir, mas oi! 💤']
+};
+function saudacao() {
+  const h = new Date().getHours(), k = h < 5 ? 'madru' : h < 12 ? 'manha' : h < 18 ? 'tarde' : 'noite';
+  const l = OI[k]; return l[ui.msgI % l.length].replace('{nome}', S.name || 'dona');
+}
 function fala(N, md) {
+  if (ui.greet) return saudacao();
   const bank = S.sass ? FALAS : CALMO;
   let key = md;
   if (N.isPast) key = 'past'; else if (!N.isCur) key = 'future'; else if (N.gasto === 0) key = 'start';
@@ -543,7 +554,7 @@ function homeView() {
     <div class="bubble" data-a="poke">${esc(fala(N, md))}</div>
     <div class="gauge ${petCls()}">
       <svg class="arc ${N.pode < 0 ? 'over' : ''}" viewBox="0 0 240 240"><path class="trk" d="M46.46 193.54 A104 104 0 1 1 193.54 193.54" fill="none" stroke-width="11" stroke-linecap="round" pathLength="100"/><path class="val" d="M46.46 193.54 A104 104 0 1 1 193.54 193.54" fill="none" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="${N.pode < 0 ? 100 : (frac * 100).toFixed(2)} 200"/></svg>
-      <div class="byun-wrap ${S.motion === 'bounce' ? 'bounce' : ''}" data-a="poke" style="${S.motion === 'bounce' ? hopStyle(N, md) : ''}">${byunSVG(md)}</div>
+      <div class="byun-wrap ${S.motion === 'bounce' ? 'bounce' : ''} ${ui.greet ? 'hello' : ''}" data-a="poke" style="${S.motion === 'bounce' ? hopStyle(N, md) : ''}">${byunSVG(md)}</div>
     </div>
     <div class="label">Pode gastar <!--eye--></div>
     <div class="big">${money(N.pode)}</div>
@@ -1062,6 +1073,10 @@ function drawCharts() {
     if (k === 'cum' || k === 'boxes') lineChart(el, o); else if (k === 'daily') barChart(el, o); else groupChart(el, o);
   });
 }
+ui.msgI = Math.floor(Math.random() * 12);
+// ao abrir: o Byun dá oi e depois volta pras falas normais; de tempos em tempos ele fala sozinho
+setTimeout(() => { ui.greet = false; const b = $('.bubble'); if (b && ui.view === 'home') { const n = info(); b.textContent = fala(n, mood(n)); b.style.animation = 'none'; b.offsetHeight; b.style.animation = ''; } const w = $('.byun-wrap'); if (w) w.classList.remove('hello'); }, 5000);
+setInterval(() => { if (document.hidden || ui.view !== 'home' || ui.greet || $('.sheet')) return; const b = $('.bubble'); if (!b) return; ui.msgI++; const n = info(); b.textContent = fala(n, mood(n)); b.style.animation = 'none'; b.offsetHeight; b.style.animation = ''; const w = $('.byun-wrap'); if (w) { w.classList.remove('boop'); w.offsetWidth; w.classList.add('boop'); } }, 25000);
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawCharts, 150); });
 
 /* ---------- Planejar ---------- */
