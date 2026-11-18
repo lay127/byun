@@ -599,7 +599,7 @@ function saldoCard(N) {
       <div><span class="dot" style="background:var(--s1)"></span>Dia a dia <b>-${fmt(N.gasto)}</b></div>
       <div><span class="dot" style="background:var(--s4)"></span>Extras <b>-${fmt(N.exOut + N.exSave)}</b></div>
       <div><span class="dot" style="background:var(--s7)"></span>Guardado <b>${N.guard > 0 ? '-' : ''}${fmt(Math.abs(N.guard))}</b></div>
-      ${N.incomes.map(({ f, date }) => `<div class="leg-inc tap" data-a="editFixed" data-v="${f.id}">💰 ${esc(f.name)}<b class="pos">${!noDate(f) && date <= today && N.isCur ? '✓ ' : ''}+${fmt(f.amount)}</b><small>${noDate(f) ? 'sem data' : shortDate(date).replace(/^\S+ /, '')}</small></div>`).join('')}
+      ${N.incomes.map(({ f, date }) => `<div class="leg-inc tap" data-a="editFixed" data-v="${f.id}">💰 ${esc(f.name)}<b class="pos">${!noDate(f) && date <= today && N.isCur ? '✓ ' : ''}+${fmt(f.amount)}</b></div>`).join('')}
     </div></div><div class="sp-b">
     ${N.incomes.length ? '' : `<div class="empty" style="padding-bottom:0">Cadastre suas rendas em <button class="link" data-a="newIncome">Nova renda</button> pra ver a sobra real.</div>`}
   </div></div></section>`;
