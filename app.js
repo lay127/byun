@@ -495,7 +495,9 @@ function topbar(title) {
 function nav() {
   const on = v => ui.view === v;
   const b = (v, i, l, x = '') => `<button class="${on(v) ? 'on' : ''} ${x}" data-a="go" data-v="${v}" aria-label="${l}">${ic(i)}<span>${l}</span></button>`;
-  return `<nav class="nav"><div class="brand"><i class="${petCls()}">${byunSVG('happy')}</i><b>Byun</b></div>${b('home', 'home', 'Início')}${b('tx', 'list', 'Transações')}<button class="plus" data-a="add" data-v="gasto" aria-label="Novo lançamento">${ic('plus')}<span>Novo lançamento</span></button>${b('cardsFull', 'card', 'Cartões', 'only-desk')}${b('boxesFull', 'piggy', 'Cofrinho', 'only-desk')}${b('charts', 'pie', 'Análises')}${b('plan', 'sliders', 'Planejar')}${b('settings', 'gear', 'Ajustes', 'only-desk')}</nav>`;
+  const monthBox = `<div class="nav-month"><button data-a="month" data-v="-1" aria-label="Mês anterior">${ic('left')}</button><b>${monthName(ui.month)}${ui.month.slice(0, 4) !== curKey().slice(0, 4) ? ' ' + ui.month.slice(0, 4) : ''}</b><button data-a="month" data-v="1" aria-label="Próximo mês">${ic('right')}</button></div>`;
+  const tools = `<div class="nav-tools"><button data-a="theme" aria-label="Tema">${ic(S.theme === 'dark' ? 'sun' : 'moon')}<span>${S.theme === 'dark' ? 'Modo claro' : 'Modo escuro'}</span></button><button data-a="hide" aria-label="${HIDE ? 'Mostrar valores' : 'Esconder valores'}">${ic(HIDE ? 'eyeOff' : 'eye')}<span>${HIDE ? 'Mostrar valores' : 'Esconder valores'}</span></button></div>`;
+  return `<nav class="nav"><div class="brand"><i class="${petCls()}">${byunSVG('happy')}</i><b>Byun</b></div>${monthBox}${b('home', 'home', 'Início')}${b('tx', 'list', 'Transações')}<button class="plus" data-a="add" data-v="gasto" aria-label="Novo lançamento">${ic('plus')}<span>Novo lançamento</span></button>${b('cardsFull', 'card', 'Cartões', 'only-desk')}${b('boxesFull', 'piggy', 'Cofrinho', 'only-desk')}${b('charts', 'pie', 'Análises')}${b('plan', 'sliders', 'Planejar')}${b('settings', 'gear', 'Ajustes', 'only-desk')}${tools}</nav>`;
 }
 
 let sortedOnce = false;
