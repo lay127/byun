@@ -550,3 +550,9 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
   .hero-card .qa{margin:14px 0 0!important;padding-bottom:20px}
   .hero-card .qa button i{background:var(--card2)}
 }
+@media (min-width:1100px){
+  .full-boxes>.card:nth-child(-n+2){align-self:stretch}
+  .full-boxes>.card.evo{display:flex;flex-direction:column}
+  .chart.fill{flex:1;min-height:190px;position:relative}
+  .chart.fill>svg{position:absolute;top:0;left:0}
+}

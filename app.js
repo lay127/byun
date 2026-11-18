@@ -810,7 +810,7 @@ function boxesFullView() {
       <div class="kpis two"><div class="kpi"><div class="k">Guardou no mês</div><div class="v">${fmt(BX.dep)}</div></div><div class="kpi"><div class="k">Rendeu no mês</div><div class="v pos">${fmt(BX.rend)}</div></div></div>
       <div class="trio"><button class="btn ghost" data-a="move" data-v="dep">Guardar</button><button class="btn ghost" data-a="move" data-v="ret">Retirar</button><button class="btn ghost" data-a="move" data-v="rend">Rendeu</button></div>
       <button class="btn" data-a="newBox">${ic('plus')} Nova caixinha</button></section>
-    ${(S.boxes || []).length ? `<section class="card"><div class="card-h"><span class="t">${ic('trend')} Evolução</span></div><div class="chart" data-chart="boxes"></div></section>` : ''}
+    ${(S.boxes || []).length ? `<section class="card evo"><div class="card-h"><span class="t">${ic('trend')} Evolução</span></div><div class="chart fill" data-chart="boxes"></div></section>` : ''}
     ${(S.boxes || []).map(b => `<section class="card"><div class="card-h"><span class="t">${esc(b.icon || '🐷')} ${esc(b.name)}</span></div>${boxBody(b, true)}</section>`).join('')}
   </div>`;
 }
@@ -1002,7 +1002,7 @@ function axes(W, H, pl, pr, pt, pb, max) {
 }
 function xLabels(labels, x, H, pb, every) { return labels.map((l, i) => (i % every === 0 || i === labels.length - 1) ? `<text class="ax" x="${x(i)}" y="${H - pb + 16}" text-anchor="middle">${l}</text>` : '').join(''); }
 function lineChart(el, o) {
-  const W = el.clientWidth || 320, H = 190, pl = 42, pr = 8, pt = 10, pb = 24;
+  const W = el.clientWidth || 320, H = el.classList.contains('fill') && innerWidth >= 1100 ? Math.max(190, el.clientHeight) : 190, pl = 42, pr = 8, pt = 10, pb = 24;
   const max = niceMax(Math.max(...o.series.flatMap(s => s.values.filter(v => v != null)), 1));
   const n = o.labels.length, x = i => pl + (W - pl - pr) * (n <= 1 ? 0 : i / (n - 1)), y = v => pt + (H - pt - pb) * (1 - v / max);
   const paths = o.series.map(s => { let d = '', on = false; s.values.forEach((v, i) => { if (v == null) { on = false; return; } d += (on ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); on = true; }); return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${s.dash ? 'stroke-dasharray="4 4"' : ''}/>`; }).join('');
