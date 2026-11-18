@@ -720,18 +720,54 @@ function recentCard(N) {
     ${list.length ? list.map(txRow).join('') : `<div class="empty"><b>Nenhum lançamento em ${monthName(N.m).toLowerCase()}</b>Toque em + pra anotar.</div>`}
   </section>`;
 }
+/* pago / devendo / me devem */
+function isPaid(t) {
+  if (t.type !== 'gasto') return true;
+  if (typeof t.paid === 'boolean') return t.paid;
+  const a = acc(t.accId);
+  if (!isCredit(a)) return true;                                      // débito e pix já saem pagos
+  return (S.fixedPaid[invMonth(t, a)] || []).includes('card:' + a.id); // cartão: pago quando a fatura é marcada
+}
+const owes = t => t.owedBy && t.owedBy.name && !t.owedBy.received;
+function debts(m = ui.month) {
+  const end = `${m}-31`;
+  const unpaid = S.tx.filter(t => t.type === 'gasto' && t.date <= end && !isPaid(t));
+  const owed = S.tx.filter(owes);
+  const people = {}; owed.forEach(t => { const k = t.owedBy.name.trim(); (people[k] = people[k] || { name: k, v: 0, n: 0 }); people[k].v += +t.owedBy.amount || t.amount; people[k].n++; });
+  return { unpaid, devo: sum(unpaid), owed, meDevem: sum(owed, t => +t.owedBy.amount || t.amount), people: Object.values(people).sort((a, b) => b.v - a.v) };
+}
+// quando alguém paga o que devia, o dinheiro volta como receita na conta
+function receive(t, on) {
+  const o = t.owedBy; if (!o) return;
+  if (on && !o.received) {
+    const a = acc(t.accId);
+    const back = isCredit(a) ? (acc(S.defaultAcc) && !isCredit(acc(S.defaultAcc)) ? S.defaultAcc : (S.accounts.find(x => !isCredit(x)) || a).id) : t.accId;
+    const r = { id: uid(), type: 'receita', amount: +o.amount || t.amount, accId: back, note: `${o.name} pagou${t.note ? ': ' + t.note : ''}`, date: todayISO(), at: Date.now(), fromOwe: t.id };
+    S.tx.push(r); o.received = true; o.recvTx = r.id;
+    toast(`${o.name} pagou ✓ ${fmt(r.amount)} voltou pra ${acc(back)?.name || 'conta'}`);
+  } else if (!on && o.received) {
+    S.tx = S.tx.filter(x => x.id !== o.recvTx); o.received = false; delete o.recvTx;
+    toast('Voltou pra pendente');
+  }
+}
 function txRow(t) {
   const c = cat(t.catId), a = acc(t.accId), r = t.type === 'receita';
   const title = t.note || (r ? 'Receita' : c?.name || 'Gasto');
   const sub = [r ? (t.note ? 'Receita' : '') : (t.note ? c?.name : ''), a?.name, t.inst ? `parcela ${t.inst}` : ''].filter(Boolean).join(' · ');
-  return `<div class="row tap" data-a="editTx" data-v="${t.id}"><div class="ico">${r ? '💰' : esc(c?.icon || '📦')}</div><div class="l"><div class="n">${esc(title)}</div><div class="d">${esc(sub || dayLabel(t.date))}</div></div><div class="v ${r ? 'pos' : ''}">${r ? '+' : '-'}${fmt(t.amount)}</div></div>`;
+  const owe = t.owedBy && t.owedBy.name ? `<div class="owe ${t.owedBy.received ? 'ok' : ''}">${t.owedBy.received ? '✓ ' + esc(t.owedBy.name) + ' pagou' : esc(t.owedBy.name) + ' te deve ' + fmt(+t.owedBy.amount || t.amount)}</div>` : '';
+  const chk = ui.view === 'tx' && !r ? (ui.txType === 'medevem'
+      ? `<button class="check ${t.owedBy?.received ? 'on' : ''}" data-a="recv" data-v="${t.id}" aria-label="Marcar como recebido">${ic('check')}</button>`
+      : `<button class="check ${isPaid(t) ? 'on' : ''}" data-a="paidTx" data-v="${t.id}" aria-label="Marcar como pago">${ic('check')}</button>`) : '';
+  return `<div class="row tap ${chk && isPaid(t) && ui.txType !== 'medevem' ? 'is-paid' : ''}" data-a="editTx" data-v="${t.id}">${chk}<div class="ico">${r ? '💰' : esc(c?.icon || '📦')}</div><div class="l"><div class="n">${esc(title)}</div><div class="d">${esc(sub || dayLabel(t.date))}</div>${owe}</div><div class="v ${r ? 'pos' : ''}">${r ? '+' : '-'}${fmt(t.amount)}</div></div>`;
 }
 
 /* ---------- Transações ---------- */
 function txView() {
   const N = info();
   const q = ui.q.trim().toLowerCase();
-  let list = N.tx.filter(t => ui.txType === 'all' || t.type === ui.txType)
+  const DB = debts();
+  const base = ui.txType === 'apagar' ? DB.unpaid : ui.txType === 'medevem' ? DB.owed : N.tx;
+  let list = base.filter(t => ['all', 'apagar', 'medevem'].includes(ui.txType) || t.type === ui.txType)
     .filter(t => !ui.accF || t.accId === ui.accF).filter(t => !ui.catF || t.catId === ui.catF)
     .filter(t => !q || [t.note, cat(t.catId)?.name, acc(t.accId)?.name, String(t.amount).replace('.', ',')].join(' ').toLowerCase().includes(q))
     .sort((a, b) => b.date.localeCompare(a.date) || (b.at || 0) - (a.at || 0));
@@ -740,14 +776,20 @@ function txView() {
   const tot = sum(list.filter(t => t.type === 'gasto')), totR = sum(list.filter(t => t.type === 'receita'));
   return topbar() + `<h1>Transações</h1>
     <label class="search">${ic('search')}<input id="q" type="search" placeholder="Buscar por nota, categoria ou conta" value="${esc(ui.q)}" autocomplete="off"></label>
+    <div class="debt-tiles">
+      <button class="kpi ${ui.txType === 'apagar' ? 'on' : ''}" data-a="txType" data-v="apagar"><div class="k">Você deve</div><div class="v ${DB.devo ? 'neg' : ''}">${fmt(DB.devo)}</div><div class="s">${DB.unpaid.length ? `${DB.unpaid.length} a pagar até ${monthName(ui.month).toLowerCase()}` : 'tudo pago ✓'}</div></button>
+      <button class="kpi ${ui.txType === 'medevem' ? 'on' : ''}" data-a="txType" data-v="medevem"><div class="k">Te devem</div><div class="v ${DB.meDevem ? 'pos' : ''}">${fmt(DB.meDevem)}</div><div class="s">${DB.people.length ? DB.people.slice(0, 2).map(p => esc(p.name)).join(', ') + (DB.people.length > 2 ? ` e +${DB.people.length - 2}` : '') : 'ninguém'}</div></button>
+    </div>
+    ${ui.txType === 'medevem' && DB.people.length ? `<div class="chips">${DB.people.map(p => `<span class="chip">${esc(p.name)} · ${fmt(p.v)}</span>`).join('')}</div>` : ''}
     <div class="chips">
-      ${[['all', 'Tudo'], ['gasto', 'Gastos'], ['receita', 'Receitas']].map(([v, l]) => `<button class="chip ${ui.txType === v ? 'on' : ''}" data-a="txType" data-v="${v}">${l}</button>`).join('')}
+      ${[['all', 'Tudo'], ['gasto', 'Gastos'], ['receita', 'Receitas'], ['apagar', 'A pagar'], ['medevem', 'Me devem']].map(([v, l]) => `<button class="chip ${ui.txType === v ? 'on' : ''}" data-a="txType" data-v="${v}">${l}</button>`).join('')}
       ${S.accounts.map(a => `<button class="chip ${ui.accF === a.id ? 'on' : ''}" data-a="accF" data-v="${a.id}"><span class="dot" style="background:${a.color}"></span>${esc(a.name)}</button>`).join('')}
     </div>
     <div class="chips">${S.categories.map(c => `<button class="chip ${ui.catF === c.id ? 'on' : ''}" data-a="catF" data-v="${c.id}">${esc(c.icon)} ${esc(c.name.split(' ')[0])}</button>`).join('')}</div>
     ${list.length ? `<div class="sub" style="margin:8px 4px">${list.length} lançamentos · <b class="ink2">-${fmt(tot)}</b>${totR ? ` · <b class="pos">+${fmt(totR)}</b>` : ''}</div>` : ''}
     ${list.length ? Object.entries(groups).map(([d, ts]) => `<div class="day-h"><span>${dayLabel(d)}</span><span>${fmt(sum(ts.filter(t => t.type === 'gasto')))}</span></div><div class="card" style="padding:4px 16px">${ts.map(txRow).join('')}</div>`).join('')
-      : `<div class="empty" style="margin-top:40px"><b>Nenhum lançamento em ${monthName(ui.month).toLowerCase()}</b>Toque em + pra anotar.</div>`}`;
+      : `<div class="empty" style="margin-top:40px"><b>${ui.txType === 'apagar' ? 'Nada pra pagar 🎉' : ui.txType === 'medevem' ? 'Ninguém te deve nada' : `Nenhum lançamento em ${monthName(ui.month).toLowerCase()}`}</b>${ui.txType === 'medevem' ? 'Ao lançar um gasto, abra "Data, nota e mais" e marque quem te deve.' : 'Toque em + pra anotar.'}</div>`}
+    ${['all', 'gasto'].includes(ui.txType) && list.some(t => t.type === 'gasto') ? '<p class="sub" style="text-align:center;margin-top:14px">Toque no círculo pra marcar como pago.</p>' : ''}`;
 }
 
 /* ---------- Análises (gráficos) ---------- */
@@ -1006,8 +1048,8 @@ const sheetHead = t => `<div class="sheet-h"><h3>${t}</h3><button class="icon-bt
 /* lançamento rápido */
 function openAdd(type = 'gasto', t = null) {
   const def = S.accounts.find(a => a.id === S.defaultAcc) ? S.defaultAcc : S.accounts[0]?.id;
-  draft = t ? { type: t.type, cents: Math.round(t.amount * 100), catId: t.catId, accId: t.accId, note: t.note || '', date: t.date, parcelas: 1, more: true, step: 2, editId: t.id }
-    : { type, cents: 0, catId: null, accId: def, note: '', date: ui.month === curKey() ? todayISO() : ui.month + '-01', parcelas: 1, more: false, step: 1, editId: null };
+  draft = t ? { type: t.type, cents: Math.round(t.amount * 100), catId: t.catId, accId: t.accId, note: t.note || '', date: t.date, parcelas: 1, more: true, step: 2, editId: t.id, paid: isPaid(t), owe: t.owedBy ? { on: true, name: t.owedBy.name, amount: moneyInput(t.owedBy.amount), received: !!t.owedBy.received } : { on: false, name: '', amount: '' } }
+    : { type, cents: 0, catId: null, accId: def, note: '', date: ui.month === curKey() ? todayISO() : ui.month + '-01', parcelas: 1, more: false, step: 1, editId: null, paid: null, owe: { on: false, name: '', amount: '' } };
   openSheet('<div id="add"></div>'); renderAdd();
 }
 function renderAdd() {
@@ -1037,6 +1079,11 @@ function renderAdd() {
     <div class="details ${d.more ? 'open' : ''}"><button data-a="dMore">Data, nota e mais ${ic('down')}</button>
       ${d.more ? `<label class="fld"><span>Nota</span><input id="dNote" value="${esc(d.note)}" placeholder="Ex.: Uber pro metrô" maxlength="60"></label>
       <label class="fld"><span>Data</span><input id="dDate" type="date" value="${d.date}"></label>
+      ${d.type === 'gasto' ? `<label class="switch"><div><div class="n">Já pago</div><div class="d">${isCredit(a) ? 'No cartão, fica pago quando a fatura é paga' : 'Débito e pix já saem pagos'}</div></div><span class="tgl"><input type="checkbox" id="dPaid" ${(d.paid ?? !isCredit(a)) ? 'checked' : ''}><i></i></span></label>
+      <label class="switch"><div><div class="n">Alguém me deve isso</div><div class="d">Ex.: dividiu a conta, pagou por alguém</div></div><span class="tgl"><input type="checkbox" id="dOweOn" ${d.owe?.on ? 'checked' : ''}><i></i></span></label>
+      ${d.owe?.on ? `<div class="duo"><label class="fld" style="margin-top:0"><span>Quem</span><input id="dOweName" value="${esc(d.owe.name)}" placeholder="Nome" maxlength="30" list="peopleList"></label><label class="fld" style="margin-top:0"><span>Quanto</span><input id="dOweAmt" inputmode="decimal" value="${esc(d.owe.amount)}" placeholder="${moneyInput(v) || '0,00'}"></label></div>
+      <datalist id="peopleList">${[...new Set(S.tx.filter(x => x.owedBy?.name).map(x => x.owedBy.name))].map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <span class="hint" style="display:block;margin-top:6px">Vazio = o valor inteiro.</span>` : ''}` : ''}
       ${d.type === 'gasto' && isCredit(a) && !d.editId ? `<label class="fld"><span>Parcelas</span><select id="dParc">${Array.from({ length: 24 }, (_, i) => `<option value="${i + 1}" ${d.parcelas === i + 1 ? 'selected' : ''}>${i === 0 ? 'À vista' : `${i + 1}x de ${fmt(v / (i + 1))}`}</option>`).join('')}</select></label>` : ''}` : ''}
     </div>
     <button class="btn" data-a="dSave" ${d.cents ? '' : 'disabled'}>${d.editId ? 'Salvar' : d.type === 'gasto' ? 'Lançar gasto' : 'Lançar receita'}</button>
@@ -1045,20 +1092,30 @@ function renderAdd() {
 function saveDraft() {
   const d = draft; if (!d || !d.cents) return;
   const amount = d.cents / 100;
+  if (d.owe?.on && !d.owe.name.trim()) { toast('Coloque o nome de quem te deve'); return; }
+  const extra = t => {
+    if (t.type !== 'gasto') { delete t.paid; delete t.owedBy; return t; }
+    if (d.paid !== null && d.paid !== undefined) t.paid = d.paid;
+    if (d.owe?.on) t.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || 0, received: !!d.owe.received }; else delete t.owedBy;
+    return t;
+  };
   if (d.editId) {
     const t = S.tx.find(x => x.id === d.editId);
-    Object.assign(t, { type: d.type, amount, catId: d.type === 'gasto' ? d.catId : null, accId: d.accId, note: d.note.trim(), date: d.date });
+    extra(Object.assign(t, { type: d.type, amount, catId: d.type === 'gasto' ? d.catId : null, accId: d.accId, note: d.note.trim(), date: d.date }));
     toast('Lançamento atualizado');
   } else if (d.parcelas > 1) {
     const g = uid(), each = Math.round(amount / d.parcelas * 100) / 100;
     for (let i = 0; i < d.parcelas; i++) {
       const [y, m, dd] = d.date.split('-').map(Number); const k = addMonths(`${y}-${pad(m)}`, i);
       const day = Math.min(dd, dim(k));
-      S.tx.push({ id: uid(), type: 'gasto', amount: i === d.parcelas - 1 ? Math.round((amount - each * (d.parcelas - 1)) * 100) / 100 : each, catId: d.catId, accId: d.accId, note: d.note.trim(), date: `${k}-${pad(day)}`, group: g, inst: `${i + 1}/${d.parcelas}`, at: Date.now() });
+      const tx = { id: uid(), type: 'gasto', amount: i === d.parcelas - 1 ? Math.round((amount - each * (d.parcelas - 1)) * 100) / 100 : each, catId: d.catId, accId: d.accId, note: d.note.trim(), date: `${k}-${pad(day)}`, group: g, inst: `${i + 1}/${d.parcelas}`, at: Date.now() };
+      if (d.paid !== null && d.paid !== undefined) tx.paid = d.paid;
+      if (i === 0 && d.owe?.on) tx.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || amount, received: false };
+      S.tx.push(tx);
     }
     toast(`${d.parcelas}x lançado`);
   } else {
-    S.tx.push({ id: uid(), type: d.type, amount, catId: d.type === 'gasto' ? d.catId : null, accId: d.accId, note: d.note.trim(), date: d.date, at: Date.now() });
+    S.tx.push(extra({ id: uid(), type: d.type, amount, catId: d.type === 'gasto' ? d.catId : null, accId: d.accId, note: d.note.trim(), date: d.date, at: Date.now() }));
     toast(d.type === 'gasto' ? 'Gasto lançado' : 'Receita lançada');
   }
   if (d.type === 'gasto') S.lastAdded = { amount: d.parcelas > 1 ? amount / d.parcelas : amount, at: Date.now() };
@@ -1404,7 +1461,11 @@ document.addEventListener('click', e => {
     case 'accF': ui.accF = ui.accF === v ? null : v; render(); break;
     case 'catF': ui.catF = ui.catF === v ? null : v; render(); break;
     case 'payDay': ui.payDay = ui.payDay === +v ? null : +v; render(); break;
-    case 'pay': { const m = ui.month; const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(v); if (i >= 0) p.splice(i, 1); else { p.push(v); toast('Marcado como pago'); } save(); render(); break; }
+    case 'pay': { const m = ui.month; const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(v); const on = i < 0; if (!on) p.splice(i, 1); else { p.push(v); toast('Marcado como pago'); }
+      if (v.startsWith('card:')) { const a = acc(v.slice(5)); if (a) S.tx.forEach(t => { if (t.accId === a.id && t.type === 'gasto' && invMonth(t, a) === m) t.paid = on; }); }
+      save(); render(); break; }
+    case 'paidTx': { e.stopPropagation(); const t = S.tx.find(x => x.id === v); if (t) { t.paid = !isPaid(t); toast(t.paid ? 'Pago ✓' : 'Voltou pra a pagar'); save(); render(); } break; }
+    case 'recv': { e.stopPropagation(); const t = S.tx.find(x => x.id === v); if (t?.owedBy) { receive(t, !t.owedBy.received); save(); render(); } break; }
     case 'newFixed': fixedForm(null, 'sai'); break;
     case 'newIncome': incomeForm(); break;
     case 'newBox': boxForm(); break;
@@ -1477,6 +1538,8 @@ document.addEventListener('input', e => {
   if (t.dataset.obi) { const r = obData().incomes[+t.dataset.obi]; r[t.dataset.k] = t.value; if (t.dataset.k === 'rule') render(); return; }
   if (t.id === 'q') { ui.q = t.value; const pos = t.selectionStart; render(); const n = $('#q'); n.focus(); try { n.setSelectionRange(pos, pos); } catch (er) { } return; }
   if (draft && t.id === 'dNote') draft.note = t.value;
+  if (draft && t.id === 'dOweName') draft.owe.name = t.value;
+  if (draft && t.id === 'dOweAmt') draft.owe.amount = t.value;
   if (draft && t.id === 'dDate' && t.value) draft.date = t.value;
   if (petEdit && t.dataset.pk) { petEdit.p[t.dataset.pk] = t.value; const pv = $('.pet-prev'); if (pv) pv.firstElementChild.outerHTML = byunSVG('normal', petEdit.p); }
   if (t.dataset.setv) { S[t.dataset.setv] = t.dataset.setv === 'cdi' ? (parseFloat(t.value.replace(',', '.')) || 0) : t.value; save(); }
@@ -1484,6 +1547,8 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (draft && t.id === 'dParc') { draft.parcelas = +t.value; renderAdd(); }
+  if (draft && t.id === 'dPaid') draft.paid = t.checked;
+  if (draft && t.id === 'dOweOn') { draft.owe.on = t.checked; renderAdd(); }
   if (draft && t.id === 'dDate') renderAdd();
   if (t.dataset.set) { S[t.dataset.set] = t.checked; save(); }
   if (petEdit && t.dataset.pk) renderPetEditor();

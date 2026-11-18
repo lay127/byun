@@ -374,3 +374,14 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .top.main .tl{justify-self:start}
 .top.main .tr{justify-self:end;display:flex;gap:4px;align-items:center}
 .money.masked{letter-spacing:1px}
+
+/* pago / te devem */
+.debt-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.debt-tiles .kpi{border:2px solid transparent;text-align:left;font:inherit;color:inherit}
+.debt-tiles .kpi.on{border-color:var(--ink)}
+.row .check{margin-right:-2px}
+.row.is-paid .n{color:var(--muted)}
+.owe{display:inline-block;margin-top:5px;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#fff1c2;color:#7a5600}
+.owe.ok{background:var(--green-soft);color:var(--green)}
+:root[data-theme="dark"] .owe{background:#3a3010;color:#f0c75a}
+:root[data-theme="dark"] .owe.ok{background:var(--green-soft);color:var(--green2)}
