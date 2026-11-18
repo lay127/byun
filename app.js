@@ -853,10 +853,12 @@ const oweTotal = t => +t.owedBy?.amount || t.amount;
 const oweLeft = t => Math.max(0, r2(oweTotal(t) - partsSum(t.owedBy?.parts)));
 const owes = t => t.owedBy && t.owedBy.name && !t.owedBy.received && oweLeft(t) > 0;
 function debts(m = ui.month) {
-  const unpaid = S.tx.filter(t => t.type === 'gasto' && t.date.slice(0, 7) === m && !isPaid(t));   // só o mês que está aberto na tela
+  const unpaid = S.tx.filter(t => t.type === 'gasto' && t.date.slice(0, 7) <= m && !isPaid(t));   // o mês aberto + o que ficou sem pagar dos meses anteriores
   const owed = S.tx.filter(t => owes(t) && t.date.slice(0, 7) <= m);   // aparece a partir do mês em que a dívida surgiu
   const people = {}; owed.forEach(t => { const k = t.owedBy.name.trim(); (people[k] = people[k] || { name: k, v: 0, n: 0 }); people[k].v += oweLeft(t); people[k].n++; });
-  return { unpaid, devo: sum(unpaid, t => (t.parts || []).length ? leftToPay(t) : t.amount), owed, meDevem: sum(owed, oweLeft), people: Object.values(people).sort((a, b) => b.v - a.v) };
+  const left = t => (t.parts || []).length ? leftToPay(t) : t.amount;
+  const late = unpaid.filter(t => t.date.slice(0, 7) < m);
+  return { unpaid, devo: sum(unpaid, left), late, devoLate: sum(late, left), devoMes: sum(unpaid, left) - sum(late, left), owed, meDevem: sum(owed, oweLeft), people: Object.values(people).sort((a, b) => b.v - a.v) };
 }
 function payPart(t, amt, date = todayISO()) {
   amt = r2(Math.min(amt, leftToPay(t))); if (amt <= 0) return;
@@ -918,7 +920,7 @@ function txView() {
   return topbar() + `<h1>Transações</h1>
     <label class="search">${ic('search')}<input id="q" type="search" placeholder="Buscar por nota, categoria ou conta" value="${esc(ui.q)}" autocomplete="off"></label>
     <div class="debt-tiles">
-      <button class="kpi ${ui.txType === 'apagar' ? 'on' : ''}" data-a="txType" data-v="apagar"><div class="k">Você deve</div><div class="v ${DB.devo ? 'neg' : ''}">${fmt(DB.devo)}</div><div class="s">${DB.unpaid.length ? `${DB.unpaid.length} a pagar em ${monthName(ui.month).toLowerCase()}` : 'tudo pago ✓'}</div></button>
+      <button class="kpi ${ui.txType === 'apagar' ? 'on' : ''}" data-a="txType" data-v="apagar"><div class="k">Você deve</div><div class="v ${DB.devo ? 'neg' : ''}">${fmt(DB.devo)}</div><div class="s">${DB.unpaid.length ? (DB.late.length ? `${fmt(DB.devoMes)} de ${monthName(ui.month).toLowerCase()} + ${fmt(DB.devoLate)} de meses anteriores` : `${DB.unpaid.length} a pagar em ${monthName(ui.month).toLowerCase()}`) : 'tudo pago ✓'}</div></button>
       <button class="kpi ${ui.txType === 'medevem' ? 'on' : ''}" data-a="txType" data-v="medevem"><div class="k">Te devem</div><div class="v ${DB.meDevem ? 'pos' : ''}">${fmt(DB.meDevem)}</div><div class="s">${DB.people.length ? DB.people.slice(0, 2).map(p => esc(p.name)).join(', ') + (DB.people.length > 2 ? ` e +${DB.people.length - 2}` : '') : 'ninguém'}</div></button>
     </div>
     ${ui.txType === 'medevem' && DB.people.length ? `<div class="chips">${DB.people.map(p => `<span class="chip">${esc(p.name)} · ${fmt(p.v)}</span>`).join('')}</div>` : ''}
