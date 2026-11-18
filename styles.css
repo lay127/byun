@@ -546,3 +546,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .legend .leg-inc{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .legend .leg-inc small{display:block;font-size:10.5px;color:var(--muted);margin-top:1px}
 .legend .leg-inc:hover b{text-decoration:underline}
+@media (min-width:760px){
+  .hero-card .qa{margin:14px 0 0!important;padding-bottom:20px}
+  .hero-card .qa button i{background:var(--card2)}
+}
