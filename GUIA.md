@@ -113,4 +113,4 @@ onça, coelho ou urso), cor do corpo, cor dos olhos, cor do app, lacinho e boche
 - **Projeto pausado**: no plano grátis, o Supabase pausa projetos sem uso por cerca de uma
   semana. É só entrar no painel e reativar. Os dados não somem.
 - **Offline**: o app funciona sem internet e sincroniza quando a conexão volta.
-- **Atualizar o app**: ao mudar o código, troque `byun-v11` em `sw.js` (ex.: `byun-v12`).
+- **Atualizar o app**: ao mudar o código, troque `byun-v12` em `sw.js` (ex.: `byun-v13`).

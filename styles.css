@@ -273,8 +273,8 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .phone{width:150px;height:250px;border:6px solid var(--ink);border-radius:30px;margin:6px auto 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg)}
 .phone .appicon{width:58px;height:58px;border-radius:15px;background:var(--green);display:grid;place-items:center;animation:float 2.4s ease-in-out infinite}
 .phone small{font-size:11px;font-weight:700}
-.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 14px);transform:translate(-50%,-150%);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:999px;font-weight:700;font-size:13.5px;z-index:90;transition:transform .3s cubic-bezier(.2,.8,.2,1);white-space:nowrap}
-.toast.on{transform:translate(-50%,0)}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 14px);transform:translate(-50%,-200%);opacity:0;visibility:hidden;background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:999px;font-weight:700;font-size:13.5px;z-index:90;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .2s,visibility .3s;white-space:nowrap}
+.toast.on{transform:translate(-50%,0);opacity:1;visibility:visible}
 .section-t{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin:22px 4px 8px}
 .code{font-family:var(--mono);font-size:11px}
 
