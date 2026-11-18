@@ -49,6 +49,16 @@ const monthName = key => MESES[+key.slice(5) - 1];
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 let HIDE = false; try { HIDE = localStorage.getItem('byun.hide') === '1'; } catch (e) { }
 const MASK = 'R$ ••••';
+let HIDE_CARDS = new Set(); try { HIDE_CARDS = new Set(JSON.parse(localStorage.getItem('byun.hideCards') || '[]')); } catch (e) { }
+// desenha um card com os valores escondidos se o olhinho dele estiver fechado (ou o global)
+function withHide(key, fn) {
+  const prev = HIDE; if (HIDE_CARDS.has(key)) HIDE = true;
+  try {
+    const html = fn();
+    const eye = `<button class="eye-btn" data-a="hideCard" data-v="${key}" aria-label="${HIDE ? 'Mostrar valores deste card' : 'Esconder valores deste card'}">${ic(HIDE ? 'eyeOff' : 'eye')}</button>`;
+    return html.includes('<div class="card-h">') ? html.replace('<div class="card-h">', '<div class="card-h">' + eye) : html.replace('<!--eye-->', eye);
+  } finally { HIDE = prev; }
+}
 const fmt = v => HIDE ? MASK : brl.format(v || 0).replace(/\u00a0/g, ' ');
 const fmt0 = v => HIDE ? MASK : 'R$ ' + Math.round(v || 0).toLocaleString('pt-BR');
 const short = v => { if (HIDE) return '•••'; const a = Math.abs(v); if (a >= 1000) return (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'; return Math.round(v).toString(); };
@@ -219,14 +229,15 @@ function holidays(y) {
   return HOL[y] = s;
 }
 function isBizDay(d, sat) { const w = d.getDay(); if (w === 0 || (w === 6 && !sat)) return false; return !holidays(d.getFullYear()).has(isoD(d)); }
-const RULES = [['util5', '5º dia útil'], ['utilUltimo', 'Último dia útil'], ['dia', 'Dia fixo']];
+const RULES = [['util5', '5º dia útil'], ['utilUltimo', 'Último dia útil'], ['dia', 'Dia fixo'], ['livre', 'Sem data']];
+const noDate = f => f.rule === 'livre' || !!f.nodate;
 function payDate(f, m) {
   const [y, mo] = m.split('-').map(Number), D = dim(m);
   if (f.rule === 'util5') { let n = 0; for (let d = 1; d <= D; d++) { const dt = new Date(y, mo - 1, d); if (isBizDay(dt, f.sat !== false) && ++n === 5) return dt; } }
   if (f.rule === 'utilUltimo') { for (let d = D; d >= 1; d--) { const dt = new Date(y, mo - 1, d); if (isBizDay(dt, false)) return dt; } }
   return new Date(y, mo - 1, Math.min(+f.day || 1, D));
 }
-const ruleLabel = f => f.rule === 'util5' ? '5º dia útil' : f.rule === 'utilUltimo' ? 'último dia útil' : `todo dia ${pad(f.day || 1)}`;
+const ruleLabel = f => noDate(f) ? 'sem data' : f.rule === 'util5' ? '5º dia útil' : f.rule === 'utilUltimo' ? 'último dia útil' : `todo dia ${pad(f.day || 1)}`;
 const shortDate = d => d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '');
 
 /* ---------- cofrinho ---------- */
@@ -515,32 +526,32 @@ function hopStyle(N, md) {
 function homeView() {
   const N = info(), md = mood(N);
   const frac = N.limit > 0 ? Math.max(0, Math.min(1, N.pode / N.limit)) : 0;
-  let pill;
-  if (N.limit > 0 && N.gasto > N.limit) pill = `<span class="pill bad">Passou ${fmt0(N.gasto - N.limit)} do limite</span>`;
-  else if (N.isCur && N.gasto > N.expected * 1.05) pill = `<span class="pill bad">Acima do ritmo</span>`;
-  else pill = `<span class="pill ok">${ic('check')} No ritmo</span>`;
-  const sub = N.isCur ? `de ${fmt0(N.limit)} · ${N.daysLeft} ${N.daysLeft === 1 ? 'dia' : 'dias'}` : N.isPast ? `de ${fmt0(N.limit)} · mês encerrado` : `de ${fmt0(N.limit)} · mês futuro`;
+  let pill = () => '';
+  if (N.limit > 0 && N.gasto > N.limit) pill = () => `<span class="pill bad">Passou ${fmt0(N.gasto - N.limit)} do limite</span>`;
+  else if (N.isCur && N.gasto > N.expected * 1.05) pill = () => `<span class="pill bad">Acima do ritmo</span>`;
+  else pill = () => `<span class="pill ok">${ic('check')} No ritmo</span>`;
+  const sub = () => N.isCur ? `de ${fmt0(N.limit)} · ${N.daysLeft} ${N.daysLeft === 1 ? 'dia' : 'dias'}` : N.isPast ? `de ${fmt0(N.limit)} · mês encerrado` : `de ${fmt0(N.limit)} · mês futuro`;
 
-  const hero = `<section class="hero">
+  const hero = withHide('hero', () => `<section class="hero">
     <div class="bubble" data-a="poke">${esc(fala(N, md))}</div>
     <div class="gauge ${petCls()}">
       <svg class="arc ${N.pode < 0 ? 'over' : ''}" viewBox="0 0 240 240"><path class="trk" d="M46.46 193.54 A104 104 0 1 1 193.54 193.54" fill="none" stroke-width="11" stroke-linecap="round" pathLength="100"/><path class="val" d="M46.46 193.54 A104 104 0 1 1 193.54 193.54" fill="none" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="${N.pode < 0 ? 100 : (frac * 100).toFixed(2)} 200"/></svg>
       <div class="byun-wrap ${S.motion === 'bounce' ? 'bounce' : ''}" data-a="poke" style="${S.motion === 'bounce' ? hopStyle(N, md) : ''}">${byunSVG(md)}</div>
     </div>
-    <div class="label">Pode gastar</div>
+    <div class="label">Pode gastar <!--eye--></div>
     <div class="big">${money(N.pode)}</div>
-    <div class="sub">${sub}</div>${pill}
+    <div class="sub">${sub()}</div>${pill()}
   </section>
   <div class="qa">
     <button data-a="add" data-v="gasto"><i>${ic('minus')}</i>Gasto</button>
     <button data-a="add" data-v="receita"><i>${ic('plus')}</i>Receita</button>
     <button data-a="move" data-v="dep"><i>${ic('piggy')}</i>Guardar</button>
     <button data-a="go" data-v="plan"><i>${ic('repeat')}</i>Fixos</button>
-  </div>`;
+  </div>`);
 
   return topbar() + `<div class="home-grid">
-    <div class="side">${hero}${saldoCard(N)}</div>
-    <div class="masonry">${boxCard(N)}${billsCard(N)}${cardsCard()}${recentCard(N)}${extrasCard(N)}</div>
+    <div class="side">${hero}${withHide('saldo', () => saldoCard(N))}</div>
+    <div class="masonry">${withHide('cofrinho', () => boxCard(N))}${withHide('contas', () => billsCard(N))}${withHide('cartoes', () => cardsCard())}${withHide('recentes', () => recentCard(N))}${withHide('extras', () => extrasCard(N))}</div>
   </div>`;
 }
 
@@ -565,7 +576,7 @@ function saldoCard(N) {
       <div><span class="dot" style="background:var(--s4)"></span>Extras <b>-${fmt(N.exOut + N.exSave)}</b></div>
       <div><span class="dot" style="background:var(--s7)"></span>Guardado <b>${N.guard > 0 ? '-' : ''}${fmt(Math.abs(N.guard))}</b></div>
     </div>
-    ${N.incomes.length ? `<div class="flabel" style="margin-top:16px">Rendas do mês</div>${N.incomes.map(({ f, date }) => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">💰</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${shortDate(date)} · ${ruleLabel(f)}</div></div><div class="v pos">${date <= today && N.isCur ? '✓ ' : ''}+${fmt(f.amount)}</div></div>`).join('')}`
+    ${N.incomes.length ? `<div class="flabel" style="margin-top:16px">Rendas do mês</div>${N.incomes.map(({ f, date }) => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">💰</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${noDate(f) ? 'sem data' : shortDate(date) + ' · ' + ruleLabel(f)}</div></div><div class="v pos">${!noDate(f) && date <= today && N.isCur ? '✓ ' : ''}+${fmt(f.amount)}</div></div>`).join('')}`
       : `<div class="empty" style="padding-bottom:0">Cadastre suas rendas em <button class="link" data-a="newIncome">Nova renda</button> pra ver a sobra real.</div>`}
   </section>`;
 }
@@ -578,7 +589,7 @@ function ensureFixed(m) {
   S.fixed.filter(f => f.kind === 'sai' && (!f.since || f.since <= m)).forEach(f => {
     if (fixedTx(f, m) || (S.fixedSkip[m] || []).includes(f.id)) return;
     const a = acc(f.accId), wasPaid = (S.fixedPaid[m] || []).includes(f.id);
-    const t = { id: uid(), type: 'gasto', amount: +f.amount || 0, catId: f.catId || null, accId: f.accId || null, note: f.name, date: `${m}-${pad(Math.min(+f.day || 1, dim(m)))}`, fixedId: f.id, at: 0 };
+    const t = { id: uid(), type: 'gasto', amount: +f.amount || 0, catId: f.catId || null, accId: f.accId || null, note: f.name, date: `${m}-${pad(noDate(f) ? 1 : Math.min(+f.day || 1, dim(m)))}`, fixedId: f.id, at: 0, ...(noDate(f) ? { noDay: true } : {}) };
     if (!isCredit(a) || wasPaid) t.paid = wasPaid;          // no cartão, segue a fatura
     S.tx.push(t); changed = true;
   });
@@ -590,13 +601,13 @@ function syncFixedFuture(f, removed) {
     if (t.fixedId !== f.id || t.date.slice(0, 7) < cur || isPaid(t)) return true;
     if (removed) return false;
     const m = t.date.slice(0, 7);
-    Object.assign(t, { amount: +f.amount || 0, catId: f.catId || null, accId: f.accId || null, note: f.name, date: `${m}-${pad(Math.min(+f.day || 1, dim(m)))}` });
+    Object.assign(t, { amount: +f.amount || 0, catId: f.catId || null, accId: f.accId || null, note: f.name, date: `${m}-${pad(noDate(f) ? 1 : Math.min(+f.day || 1, dim(m)))}` });
     return true;
   });
 }
 function billsList(N) {
   // fixos no cartão já estão dentro da fatura, então não aparecem duas vezes
-  const items = N.fixOutList.filter(f => !isCredit(acc(f.accId))).map(f => { const t = fixedTx(f, N.m); return { id: f.id, tx: t?.id, open: t ? `editTx|${t.id}` : `editFixed|${f.id}`, paid: t ? isPaid(t) : N.paid.includes(f.id), name: f.name, amount: t ? t.amount : f.amount, day: +f.day || 1, icon: cat(f.catId)?.icon || '📌', sub: acc(f.accId)?.name || 'fixo' }; });
+  const items = N.fixOutList.filter(f => !isCredit(acc(f.accId))).map(f => { const t = fixedTx(f, N.m); return { id: f.id, tx: t?.id, open: t ? `editTx|${t.id}` : `editFixed|${f.id}`, paid: t ? isPaid(t) : N.paid.includes(f.id), name: f.name, amount: t ? t.amount : f.amount, day: noDate(f) ? 99 : (+f.day || 1), icon: cat(f.catId)?.icon || '📌', sub: acc(f.accId)?.name || 'fixo' }; });
   S.accounts.filter(isCredit).forEach(a => {
     const k = invoiceDueIn(a, N.m), v = invoice(a, k);
     if (v > 0) items.push({ id: `card:${a.id}@${k}`, open: `invoice|${a.id}|${k}`, paid: (S.fixedPaid[k] || []).includes('card:' + a.id), name: `Fatura ${a.name}`, amount: v, day: Math.min(+a.due || 10, dim(N.m)), icon: '💳', sub: 'compras e fixos do cartão' });
@@ -606,16 +617,16 @@ function billsList(N) {
 function billsCard(N) {
   const items = billsList(N);
   const pend = items.filter(x => !x.paid);
-  const days = [...new Set(items.map(x => x.day))];
+  const days = [...new Set(items.map(x => x.day).filter(d => d !== 99))];
   if (ui.payDay && !days.includes(ui.payDay)) ui.payDay = null;
   const shown = ui.payDay ? items.filter(x => x.day === ui.payDay) : items;
-  const next = pend[0];
+  const next = pend.find(x => x.day !== 99);
   return `<section class="card">
     <div class="card-h"><span class="t">${ic('calendar')} Contas a pagar${next ? ` <span class="muted" style="font-weight:600;font-size:12px">· dia ${pad(next.day)}</span>` : ''}</span><button class="link" data-a="newFixed">Nova ${ic('plus')}</button></div>
     ${items.length ? `<div class="saldo-big" style="font-size:28px">${money(sum(pend))}</div>
     <div class="sub" style="margin-bottom:12px">${items.length - pend.length} de ${items.length} pagas</div>
     <div class="days">${days.map(d => { const its = items.filter(x => x.day === d); const done = its.every(x => x.paid); return `<button class="${ui.payDay === d ? 'on' : ''} ${done ? 'done' : ''}" data-a="payDay" data-v="${d}">${pad(d)}<em>${'•'.repeat(Math.min(5, its.length))}</em></button>`; }).join('')}</div>
-    ${shown.map(x => { const p = x.paid; const [oa, ...ov] = (x.open || '').split('|'); return `<div class="row tap ${p ? 'paid' : ''}" data-a="${oa}" data-v="${ov.join('|')}"><button class="check ${p ? 'on' : ''}" data-a="${x.tx ? 'paidTx' : 'pay'}" data-v="${x.tx || x.id}" aria-label="Marcar como paga">${ic('check')}</button><div class="l"><div class="n">${esc(x.name)}</div><div class="d">dia ${pad(x.day)} · ${esc(x.sub)}</div></div><div class="v">${fmt(x.amount)}</div></div>`; }).join('')}`
+    ${shown.map(x => { const p = x.paid; const [oa, ...ov] = (x.open || '').split('|'); return `<div class="row tap ${p ? 'paid' : ''}" data-a="${oa}" data-v="${ov.join('|')}"><button class="check ${p ? 'on' : ''}" data-a="${x.tx ? 'paidTx' : 'pay'}" data-v="${x.tx || x.id}" aria-label="Marcar como paga">${ic('check')}</button><div class="l"><div class="n">${esc(x.name)}</div><div class="d">${x.day === 99 ? 'sem data' : 'dia ' + pad(x.day)} · ${esc(x.sub)}</div></div><div class="v">${fmt(x.amount)}</div></div>`; }).join('')}`
       : `<div class="empty"><b>Nenhuma conta cadastrada</b>Aluguel, assinaturas e faturas aparecem aqui com o dia de vencimento.</div>`}
   </section>`;
 }
@@ -992,7 +1003,7 @@ let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(dra
 function planView() {
   const N = info();
   const fIn = S.fixed.filter(f => f.kind === 'entra'), fOut = S.fixed.filter(f => f.kind === 'sai');
-  const fixRow = f => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">${esc(f.kind === 'entra' ? '💰' : cat(f.catId)?.icon || '📌')}</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${f.kind === 'entra' ? `${ruleLabel(f)} · ${shortDate(payDate(f, ui.month))}` : `dia ${pad(f.day || 1)}`}${acc(f.accId) ? ' · ' + esc(acc(f.accId).name) : ''}${cat(f.catId) && f.kind === 'sai' ? ' · ' + esc(cat(f.catId).name) : ''}</div></div><div class="v ${f.kind === 'entra' ? 'pos' : ''}">${f.kind === 'entra' ? '+' : '-'}${fmt(f.amount)}</div>${ic('right', 'i chev')}</div>`;
+  const fixRow = f => `<div class="row tap" data-a="editFixed" data-v="${f.id}"><div class="ico">${esc(f.kind === 'entra' ? '💰' : cat(f.catId)?.icon || '📌')}</div><div class="l"><div class="n">${esc(f.name)}</div><div class="d">${noDate(f) ? 'sem data' : f.kind === 'entra' ? `${ruleLabel(f)} · ${shortDate(payDate(f, ui.month))}` : `dia ${pad(f.day || 1)}`}${acc(f.accId) ? ' · ' + esc(acc(f.accId).name) : ''}${cat(f.catId) && f.kind === 'sai' ? ' · ' + esc(cat(f.catId).name) : ''}</div></div><div class="v ${f.kind === 'entra' ? 'pos' : ''}">${f.kind === 'entra' ? '+' : '-'}${fmt(f.amount)}</div>${ic('right', 'i chev')}</div>`;
   return topbar() + `<h1>Planejar</h1><div class="masonry">
     <section class="card">
       <div class="card-h"><span class="t">${ic('repeat')} Rendas e contas fixas</span></div>
@@ -1136,7 +1147,7 @@ function renderAdd() {
   const cats = d.type === 'gasto' ? `<div class="flabel">Categoria</div><div class="cats">${S.categories.map(c => `<button class="${d.catId === c.id ? 'on' : ''}" data-a="dCat" data-v="${c.id}"><i>${esc(c.icon)}</i><span>${esc(c.name.split(' ')[0])}</span></button>`).join('')}<button data-a="newCat"><i>+</i><span>Nova</span></button></div>` : '';
   const fx = d.editId ? S.fixed.find(f => f.id === S.tx.find(t => t.id === d.editId)?.fixedId) : null;
   if (fx) sub = 'Conta fixa: não entra no Pode gastar do dia a dia';
-  const head = sheetHead(d.editId ? 'Editar lançamento' : 'Novo lançamento') + (fx ? `<div class="origin">${ic('repeat')}<div><b>Lançado pela conta fixa "${esc(fx.name)}"</b><span>Todo dia ${pad(fx.day || 1)} · ${fmt(fx.amount)}. Mudar aqui vale só pra este mês.</span></div><button class="link" data-a="editFixed" data-v="${fx.id}">Ver conta fixa</button></div>` : '');
+  const head = sheetHead(d.editId ? 'Editar lançamento' : 'Novo lançamento') + (fx ? `<div class="origin">${ic('repeat')}<div><b>Lançado pela conta fixa "${esc(fx.name)}"</b><span>${noDate(fx) ? 'Sem data' : 'Todo dia ' + pad(fx.day || 1)} · ${fmt(fx.amount)}. Mudar aqui vale só pra este mês.</span></div><button class="link" data-a="editFixed" data-v="${fx.id}">Ver conta fixa</button></div>` : '');
   if (d.step === 1) {
     $('#add').innerHTML = head + tabs + `<div class="amount ${d.cents ? '' : 'zero'}">${amt}<span class="caret"></span></div><div class="amount-sub">${sub}</div>${cats}
       <div class="quick">${[10, 20, 50, 100].map(q => `<button data-a="dQuick" data-v="${q}">+${q}</button>`).join('')}</div>
@@ -1266,10 +1277,12 @@ function fixedForm(f, kind) {
     fields: [
       { key: 'name', label: 'Nome', ph: 'Ex.: Aluguel, Internet, Spotify', req: true, max: 40 },
       { key: 'amount', label: 'Valor por mês', type: 'money', req: true },
+      { key: 'nodate', label: 'Sem data específica', type: 'toggle', hint: 'Paga em qualquer dia do mês' },
       { key: 'day', label: 'Dia do vencimento', type: 'number', def: 10 },
       { key: 'catId', label: 'Categoria', type: 'select', options: catOpts() },
       { key: 'accId', label: 'Conta', type: 'select', options: accOpts() }
     ],
+    onOpen: form => { const t = () => form.querySelector('[data-fk=day]').style.display = form.querySelector('[name=nodate]').checked ? 'none' : ''; t(); form.addEventListener('change', t); },
     onSave: v => { v.kind = 'sai'; v.day = Math.min(31, Math.max(1, v.day || 1)); if (f) { Object.assign(f, v); syncFixedFuture(f); } else S.fixed.push({ id: uid(), since: ui.month, ...v }); },
     onDelete: f ? () => { syncFixedFuture(f, true); S.fixed = S.fixed.filter(x => x.id !== f.id); } : null
   });
@@ -1281,10 +1294,11 @@ function incomeForm(f) {
       { key: 'name', label: 'Nome', ph: 'Ex.: Salário, Estágio, Freela fixo', req: true, max: 40 },
       { key: 'amount', label: 'Valor por mês', type: 'money', req: true },
       { key: 'rule', label: 'Quando cai', type: 'radios', options: RULES, def: 'util5' },
-      { key: 'day', label: 'Dia (só para "Dia fixo")', type: 'number', def: 5 },
+      { key: 'day', label: 'Dia', type: 'number', def: 5 },
       { key: 'sat', label: 'Sábado conta como dia útil', type: 'toggle', hint: 'Vale para o 5º dia útil. Pela regra da CLT, o sábado conta.' },
       { key: 'accId', label: 'Cai em qual conta', type: 'select', options: accOpts() }
     ],
+    onOpen: form => { const t = () => { const r = form.querySelector('[name=rule]:checked')?.value; form.querySelector('[data-fk=day]').style.display = r === 'dia' ? '' : 'none'; form.querySelector('[data-fk=sat]').style.display = r === 'util5' ? '' : 'none'; }; t(); form.addEventListener('change', t); },
     onSave: v => { v.kind = 'entra'; v.day = Math.min(31, Math.max(1, v.day || 1)); if (f) Object.assign(f, v); else S.fixed.push({ id: uid(), since: ui.month, ...v }); },
     onDelete: f ? () => { S.fixed = S.fixed.filter(x => x.id !== f.id); } : null
   });
@@ -1532,6 +1546,7 @@ document.addEventListener('click', e => {
   switch (a) {
     case 'go': ui.view = v; window.scrollTo(0, 0); if (v === 'tx') { ui.accF = ui.catF = null; } render(); break;
     case 'month': ui.month = addMonths(ui.month, +v); ui.msgI = 0; render(); break;
+    case 'hideCard': { if (HIDE_CARDS.has(v)) HIDE_CARDS.delete(v); else HIDE_CARDS.add(v); try { localStorage.setItem('byun.hideCards', JSON.stringify([...HIDE_CARDS])); } catch (er) { } render(); break; }
     case 'hide': HIDE = !HIDE; try { localStorage.setItem('byun.hide', HIDE ? '1' : '0'); } catch (er) { } render(); break;
     case 'theme': S.theme = S.theme === 'dark' ? 'light' : 'dark'; save(); render(); break;
     case 'setTheme': S.theme = v; save(); render(); break;
