@@ -97,6 +97,7 @@ const I = {
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
@@ -1159,6 +1160,7 @@ function renderAdd() {
       ${d.type === 'gasto' && isCredit(a) ? `<label class="fld"><span>Parcelas</span><select id="dParc">${Array.from({ length: 24 }, (_, i) => `<option value="${i + 1}" ${d.parcelas === i + 1 ? 'selected' : ''}>${i === 0 ? `1x de ${fmt(v)} (de uma vez)` : `${i + 1}x de ${fmt(v / (i + 1))}`}</option>`).join('')}</select>${d.groupId || (d.editId && d.parcelas > 1) ? '<span class="hint">O valor lá em cima é o total da compra. Mudar aqui refaz todas as parcelas.</span>' : ''}</label>` : ''}` : ''}
     </div>
     <button class="btn" data-a="dSave" ${d.cents ? '' : 'disabled'}>${d.editId ? 'Salvar' : d.type === 'gasto' ? 'Lançar gasto' : 'Lançar receita'}</button>
+    ${d.editId ? `<button class="btn ghost" data-a="dDup">${ic('copy')} Duplicar lançamento</button>` : ''}
     ${d.editId ? `<button class="btn ghost danger" data-a="dDel">${d.groupId ? 'Excluir compra (todas as parcelas)' : 'Excluir lançamento'}</button>` : ''}`;
 }
 function partsBlock(d) {
@@ -1559,6 +1561,22 @@ document.addEventListener('click', e => {
     case 'pay': { let m = ui.month, key = v; if (v.includes('@')) { [key, m] = v.split('@'); } const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(key); const on = i < 0; if (!on) p.splice(i, 1); else { p.push(key); toast('Marcado como pago'); } v = key;
       if (v.startsWith('card:')) { const a = acc(v.slice(5)); if (a) S.tx.forEach(t => { if (t.accId === a.id && t.type === 'gasto' && invMonth(t, a) === m) { t.paid = on; if (on) t.paidAt = t.paidAt || todayISO(); else delete t.paidAt; } }); }
       save(); render(); break; }
+    case 'dDup': {
+      const t = S.tx.find(x => x.id === draft.editId); if (!t) break;
+      const [y, m, dd] = t.date.split('-').map(Number); const nk = addMonths(`${y}-${pad(m)}`, 1);
+      closeSheet();
+      openForm({ title: 'Duplicar lançamento', saveLabel: 'Duplicar', values: { date: `${nk}-${pad(Math.min(dd, dim(nk)))}`, amount: t.amount },
+        fields: [
+          { key: 'info', type: 'html', html: `<div class="origin">${ic('copy')}<div><b>${esc(t.note || cat(t.catId)?.name || 'Lançamento')}</b><span>${esc(cat(t.catId)?.name || '')}${acc(t.accId) ? ' · ' + esc(acc(t.accId).name) : ''}</span></div></div>` },
+          { key: 'date', label: 'Mês e dia em que vai aparecer', type: 'date', req: true },
+          { key: 'amount', label: 'Valor', type: 'money', req: true }
+        ],
+        onSave: v => {
+          const c = { id: uid(), type: t.type, amount: v.amount || t.amount, catId: t.catId, accId: t.accId, note: t.note, date: /^\d{4}-\d{2}-\d{2}$/.test(v.date) ? v.date : t.date, at: Date.now() };
+          if (t.owedBy?.name) c.owedBy = { name: t.owedBy.name, amount: t.owedBy.amount || 0, received: false };
+          S.tx.push(c); toast(`Duplicado pra ${dayLabel(c.date)}`);
+        } });
+      break; }
     case 'dPart': { const t = S.tx.find(x => x.id === draft.editId); const amt = parseMoney($('#dPartAmt').value); if (!t || !amt) { toast('Digite o valor pago'); break; } payPart(t, amt, $('#dPartDate').value || todayISO()); draft.paid = isPaid(t); save(); renderAdd(); render(); break; }
     case 'dRecv': { const t = S.tx.find(x => x.id === draft.editId); const amt = parseMoney($('#dRecvAmt').value); if (!t || !amt) { toast('Digite o valor recebido'); break; } receivePart(t, amt, $('#dRecvDate').value || todayISO()); draft.owe.received = !!t.owedBy.received; save(); renderAdd(); render(); break; }
     case 'delRecv': { const t = S.tx.find(x => x.id === draft.editId); const o = t?.owedBy; if (o) { const p = (o.parts || []).find(x => x.id === v); o.parts = (o.parts || []).filter(x => x.id !== v); if (p?.txId) S.tx = S.tx.filter(x => x.id !== p.txId); if (oweLeft(t) > 0) o.received = false; draft.owe.received = !!o.received; save(); renderAdd(); render(); toast('Recebimento desfeito'); } break; }
