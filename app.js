@@ -273,7 +273,7 @@ function cardFree(a) {
 }
 
 function info(m = ui.month) {
-  const tx = S.tx.filter(t => txMonth(t) === m);
+  const tx = S.tx.filter(t => t.date.slice(0, 7) === m);   // transações seguem a data da compra; só a fatura segue o ciclo do cartão
   const gastos = tx.filter(t => t.type === 'gasto' && !t.fixedId), receitas = tx.filter(t => t.type === 'receita');   // contas fixas lançadas não entram no dia a dia
   const gasto = sum(gastos), receita = sum(receitas);
   const limit = sum(S.categories, c => c.limit);
@@ -838,7 +838,7 @@ function chartsView() {
   const N = info(), P = info(addMonths(ui.month, -1));
   const delta = P.gasto > 0 ? (N.gasto - P.gasto) / P.gasto * 100 : null;
   const biggest = [...N.gastos].sort((a, b) => b.amount - a.amount)[0];
-  const dayOf = t => t.date.slice(0, 7) === N.m ? +t.date.slice(8) : 1;   // compra do ciclo anterior do cartão entra no dia 1
+  const dayOf = t => +t.date.slice(8);
   const daily = Array.from({ length: N.D }, (_, i) => sum(N.gastos.filter(t => dayOf(t) === i + 1)));
   const maxDay = daily.indexOf(Math.max(...daily));
   const wd = [0, 0, 0, 0, 0, 0, 0]; N.gastos.forEach(t => { const [y, m, d] = t.date.split('-').map(Number); wd[new Date(y, m - 1, d).getDay()] += t.amount; });
