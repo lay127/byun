@@ -120,7 +120,8 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .paid .n{text-decoration:line-through;color:var(--muted)}
 
 /* cartões */
-.cards-scroll{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -18px;padding:2px 18px 6px;scrollbar-width:none}
+.cards-scroll{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:18px;margin:0 -18px;padding:2px 18px 6px;scrollbar-width:none}
+.cards-scroll:after{content:'';flex:0 0 6px}
 .cards-scroll::-webkit-scrollbar{display:none}
 .ccard{flex:none;width:270px;height:164px;border-radius:18px;padding:16px;color:#fff;position:relative;overflow:hidden;scroll-snap-align:start;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.18)}
 .ccard:before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.18),transparent 45%),repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 2px,transparent 2px 4px)}
@@ -363,3 +364,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .kpis.two .kpi{background:var(--card2);border:1px solid var(--line)}
 .card .duo{margin-top:-2px}
 .card .duo .btn{margin-top:0}
+
+.inv{cursor:pointer}
+.inv:active{transform:scale(.97)}
+.inv-months{margin-top:2px}

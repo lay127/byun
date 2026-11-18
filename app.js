@@ -588,7 +588,7 @@ function cardsCard() {
     <div class="sub">Fatura de ${monthName(open).toLowerCase()}</div>
     <div class="saldo-big" style="font-size:28px;margin-bottom:12px">${money(invoice(a, open))}</div>
     <div class="cards-scroll" id="cardScroll">
-      ${cards.map((c, i) => `<div class="ccard" data-a="editAcc" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
+      ${cards.map((c, i) => `<div class="ccard" data-a="invoice" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
         <div class="top-r"><span>${esc(c.name)}</span><span class="st">${i === ui.card && fechada ? 'Fechada' : 'Aberta'}</span></div>
         <div class="chip-i"></div>
         <div class="bot"><div>Vence<b>${pad(c.due || 10)}/${pad(+cardOpenMonth(c).slice(5))}</b></div><div style="text-align:right">Limite livre<b>${fmt(cardFree(c))}</b></div></div>
@@ -596,8 +596,27 @@ function cardsCard() {
       <div class="ccard add" data-a="newAcc" data-v="credito">+ Novo cartão</div>
     </div>
     <div class="flabel" style="margin-top:14px">PRÓXIMAS FATURAS</div>
-    <div class="invoices">${nexts.map((m, i) => `<div class="inv ${i === 0 ? 'on' : ''}">${MES3[+m.slice(5) - 1]}${m.slice(0, 4) !== open.slice(0, 4) ? ' ' + m.slice(2, 4) : ''}<b>${fmt(invoice(a, m))}</b></div>`).join('')}</div>
+    <div class="invoices">${nexts.map((m, i) => `<div class="inv ${i === 0 ? 'on' : ''}" data-a="invoice" data-v="${a.id}|${m}">${MES3[+m.slice(5) - 1]}${m.slice(0, 4) !== open.slice(0, 4) ? ' ' + m.slice(2, 4) : ''}<b>${fmt(invoice(a, m))}</b></div>`).join('')}</div>
   </section>`;
+}
+function invoiceSheet(accId, m) {
+  const a = acc(accId); if (!a) return;
+  m = m || cardOpenMonth(a);
+  const list = S.tx.filter(t => t.accId === a.id && t.type === 'gasto' && invMonth(t, a) === m).sort((x, y) => y.date.localeCompare(x.date) || (y.at || 0) - (x.at || 0));
+  const total = sum(list);
+  const months = [-1, 0, 1, 2, 3].map(i => addMonths(cardOpenMonth(a), i));
+  if (!months.includes(m)) months.unshift(m);
+  const byCat = {}; list.forEach(t => { const c = cat(t.catId); const k = c ? c.id : '_'; (byCat[k] = byCat[k] || { c, v: 0 }).v += t.amount; });
+  const cats = Object.values(byCat).sort((x, y) => y.v - x.v);
+  const paidKey = 'card:' + a.id, paid = (S.fixedPaid[m] || []).includes(paidKey);
+  openSheet(sheetHead(esc(a.name)) + `
+    <div class="chips inv-months">${months.map(k => `<button class="chip ${k === m ? 'on' : ''}" data-a="invoice" data-v="${a.id}|${k}">${MES3[+k.slice(5) - 1]}${k.slice(0, 4) !== curKey().slice(0, 4) ? ' ' + k.slice(2, 4) : ''}</button>`).join('')}</div>
+    <div class="sub" style="margin-top:6px">Fatura de ${monthName(m).toLowerCase()} · vence ${pad(a.due || 10)}/${m.slice(5)}${paid ? ' · <b class="pos">paga</b>' : ''}</div>
+    <div class="saldo-big">${money(total)}</div>
+    ${cats.length > 1 ? `<div class="chips" style="margin-top:10px">${cats.map(x => `<span class="chip">${esc(x.c?.icon || '📦')} ${fmt0(x.v)}</span>`).join('')}</div>` : ''}
+    <div class="flabel">${list.length} ${list.length === 1 ? 'compra' : 'compras'} nessa fatura</div>
+    ${list.length ? `<div class="card" style="padding:4px 16px;margin:0">${list.map(txRow).join('')}</div>` : '<div class="empty">Nada nessa fatura.</div>'}
+    <button class="btn ghost" data-a="editAcc" data-v="${a.id}">Editar cartão</button>`);
 }
 function shade(hex) {
   const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
@@ -1386,6 +1405,7 @@ document.addEventListener('click', e => {
     case 'newBox': boxForm(); break;
     case 'editBox': { const b = box(v); closeSheet(); boxForm(b); break; }
     case 'openBox': boxSheet(v); break;
+    case 'invoice': { const [id, m] = v.split('|'); invoiceSheet(id, m); break; }
     case 'goBoxes': { const c = $('#cofrinho'); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.classList.remove('flash'); c.offsetWidth; c.classList.add('flash'); } break; }
     case 'move': { const b = el.dataset.b; closeSheet(); moveForm(v, b); break; }
     case 'fixBal': { const b = box(v); closeSheet(); openForm({ title: 'Atualizar saldo', saveLabel: 'Atualizar', values: { real: boxBal(b) }, fields: [{ key: 'real', label: `Quanto tem hoje em ${b.name}?`, type: 'money', hint: 'Olhe no app do banco. A diferença entra como rendimento.' }], onSave: x => { const diff = Math.round((x.real - boxBal(b)) * 100) / 100; if (diff) S.moves.push({ id: uid(), boxId: b.id, type: 'rend', amount: diff, date: todayISO(), note: 'Ajuste pelo saldo do banco' }); toast('Saldo atualizado'); } }); break; }
@@ -1398,7 +1418,7 @@ document.addEventListener('click', e => {
     case 'newCat': catForm(); break;
     case 'editCat': catForm(cat(v)); break;
     case 'newAcc': accForm(null, v || 'conta'); break;
-    case 'editAcc': accForm(acc(v)); break;
+    case 'editAcc': closeSheet(); accForm(acc(v)); break;
     case 'backup': backupSheet(); break;
     case 'copyBk': { const t = $('#bk'); try { navigator.clipboard.writeText(t.value).then(() => toast('Backup copiado'), () => { t.select(); toast('Selecionei o texto, é só copiar'); }); } catch (er) { t.select(); } break; }
     case 'restore': restoreSheet(); break;
