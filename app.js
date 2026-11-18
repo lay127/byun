@@ -260,7 +260,7 @@ function cardFree(a) {
 
 function info(m = ui.month) {
   const tx = S.tx.filter(t => t.date.slice(0, 7) === m);
-  const gastos = tx.filter(t => t.type === 'gasto'), receitas = tx.filter(t => t.type === 'receita');
+  const gastos = tx.filter(t => t.type === 'gasto' && !t.fixedId), receitas = tx.filter(t => t.type === 'receita');   // contas fixas lançadas não entram no dia a dia
   const gasto = sum(gastos), receita = sum(receitas);
   const limit = sum(S.categories, c => c.limit);
   const fixIn = sum(S.fixed.filter(f => f.kind === 'entra' && (!f.since || f.since <= m)));
@@ -473,6 +473,7 @@ function nav() {
 let sortedOnce = false;
 function render() {
   if (!sortedOnce && S.accounts) { sortAccounts(); sortedOnce = true; }
+  if ((!CLOUD || (user && !isAdmin)) && S.onboarded) { const c1 = ensureFixed(curKey()), c2 = ui.month <= addMonths(curKey(), 1) && ensureFixed(ui.month); if (c1 || c2) save(); }
   document.documentElement.dataset.theme = S.theme; applyAccent();
   if (!CLOUD || (user && !isAdmin)) updateAppIcon(curPet()); else updateAppIcon(null);
   const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = S.theme === 'dark' ? '#0a0b0a' : '#ffffff';
@@ -554,17 +555,42 @@ function saldoCard(N) {
   </section>`;
 }
 
+/* contas fixas viram lançamentos em Transações, ligados a Contas a pagar */
+function fixedTx(f, m) { return S.tx.find(t => t.fixedId === f.id && t.date.slice(0, 7) === m); }
+function ensureFixed(m) {
+  if (!S.onboarded || !m) return false;
+  let changed = false; S.fixedSkip = S.fixedSkip || {};
+  S.fixed.filter(f => f.kind === 'sai' && (!f.since || f.since <= m)).forEach(f => {
+    if (fixedTx(f, m) || (S.fixedSkip[m] || []).includes(f.id)) return;
+    const a = acc(f.accId), wasPaid = (S.fixedPaid[m] || []).includes(f.id);
+    const t = { id: uid(), type: 'gasto', amount: +f.amount || 0, catId: f.catId || null, accId: f.accId || null, note: f.name, date: `${m}-${pad(Math.min(+f.day || 1, dim(m)))}`, fixedId: f.id, at: 0 };
+    if (!isCredit(a) || wasPaid) t.paid = wasPaid;          // no cartão, segue a fatura
+    S.tx.push(t); changed = true;
+  });
+  return changed;
+}
+function syncFixedFuture(f, removed) {
+  const cur = curKey();
+  S.tx = S.tx.filter(t => {
+    if (t.fixedId !== f.id || t.date.slice(0, 7) < cur || isPaid(t)) return true;
+    if (removed) return false;
+    const m = t.date.slice(0, 7);
+    Object.assign(t, { amount: +f.amount || 0, catId: f.catId || null, accId: f.accId || null, note: f.name, date: `${m}-${pad(Math.min(+f.day || 1, dim(m)))}` });
+    return true;
+  });
+}
 function billsList(N) {
-  const items = N.fixOutList.map(f => ({ id: f.id, name: f.name, amount: f.amount, day: +f.day || 1, icon: cat(f.catId)?.icon || '📌', sub: acc(f.accId)?.name || 'fixo' }));
+  // fixos no cartão já estão dentro da fatura, então não aparecem duas vezes
+  const items = N.fixOutList.filter(f => !isCredit(acc(f.accId))).map(f => { const t = fixedTx(f, N.m); return { id: f.id, tx: t?.id, paid: t ? isPaid(t) : N.paid.includes(f.id), name: f.name, amount: t ? t.amount : f.amount, day: +f.day || 1, icon: cat(f.catId)?.icon || '📌', sub: acc(f.accId)?.name || 'fixo' }; });
   S.accounts.filter(isCredit).forEach(a => {
     const v = invoice(a, N.m);
-    if (v > 0) items.push({ id: 'card:' + a.id, name: 'Fatura ' + a.name, amount: v, day: +a.due || 10, icon: '💳', sub: 'já contado no dia a dia' });
+    if (v > 0) items.push({ id: 'card:' + a.id, paid: N.paid.includes('card:' + a.id), name: 'Fatura ' + a.name, amount: v, day: +a.due || 10, icon: '💳', sub: 'compras e fixos do cartão' });
   });
   return items.sort((a, b) => a.day - b.day);
 }
 function billsCard(N) {
   const items = billsList(N);
-  const pend = items.filter(x => !N.paid.includes(x.id));
+  const pend = items.filter(x => !x.paid);
   const days = [...new Set(items.map(x => x.day))];
   if (ui.payDay && !days.includes(ui.payDay)) ui.payDay = null;
   const shown = ui.payDay ? items.filter(x => x.day === ui.payDay) : items;
@@ -573,8 +599,8 @@ function billsCard(N) {
     <div class="card-h"><span class="t">${ic('calendar')} Contas a pagar${next ? ` <span class="muted" style="font-weight:600;font-size:12px">· dia ${pad(next.day)}</span>` : ''}</span><button class="link" data-a="newFixed">Nova ${ic('plus')}</button></div>
     ${items.length ? `<div class="saldo-big" style="font-size:28px">${money(sum(pend))}</div>
     <div class="sub" style="margin-bottom:12px">${items.length - pend.length} de ${items.length} pagas</div>
-    <div class="days">${days.map(d => { const its = items.filter(x => x.day === d); const done = its.every(x => N.paid.includes(x.id)); return `<button class="${ui.payDay === d ? 'on' : ''} ${done ? 'done' : ''}" data-a="payDay" data-v="${d}">${pad(d)}<em>${'•'.repeat(Math.min(5, its.length))}</em></button>`; }).join('')}</div>
-    ${shown.map(x => { const p = N.paid.includes(x.id); return `<div class="row ${p ? 'paid' : ''}"><button class="check ${p ? 'on' : ''}" data-a="pay" data-v="${x.id}" aria-label="Marcar como paga">${ic('check')}</button><div class="l"><div class="n">${esc(x.name)}</div><div class="d">dia ${pad(x.day)} · ${esc(x.sub)}</div></div><div class="v">${fmt(x.amount)}</div></div>`; }).join('')}`
+    <div class="days">${days.map(d => { const its = items.filter(x => x.day === d); const done = its.every(x => x.paid); return `<button class="${ui.payDay === d ? 'on' : ''} ${done ? 'done' : ''}" data-a="payDay" data-v="${d}">${pad(d)}<em>${'•'.repeat(Math.min(5, its.length))}</em></button>`; }).join('')}</div>
+    ${shown.map(x => { const p = x.paid; return `<div class="row ${p ? 'paid' : ''}"><button class="check ${p ? 'on' : ''}" data-a="${x.tx ? 'paidTx' : 'pay'}" data-v="${x.tx || x.id}" aria-label="Marcar como paga">${ic('check')}</button><div class="l"><div class="n">${esc(x.name)}</div><div class="d">dia ${pad(x.day)} · ${esc(x.sub)}</div></div><div class="v">${fmt(x.amount)}</div></div>`; }).join('')}`
       : `<div class="empty"><b>Nenhuma conta cadastrada</b>Aluguel, assinaturas e faturas aparecem aqui com o dia de vencimento.</div>`}
   </section>`;
 }
@@ -753,7 +779,7 @@ function receive(t, on) {
 function txRow(t) {
   const c = cat(t.catId), a = acc(t.accId), r = t.type === 'receita';
   const title = t.note || (r ? 'Receita' : c?.name || 'Gasto');
-  const sub = [r ? (t.note ? 'Receita' : '') : (t.note ? c?.name : ''), a?.name, t.inst ? `parcela ${t.inst}` : ''].filter(Boolean).join(' · ');
+  const sub = [t.fixedId ? 'conta fixa' : '', r ? (t.note ? 'Receita' : '') : (t.note ? c?.name : ''), a?.name, t.inst ? `parcela ${t.inst}` : ''].filter(Boolean).join(' · ');
   const owe = t.owedBy && t.owedBy.name ? `<div class="owe ${t.owedBy.received ? 'ok' : ''}">${t.owedBy.received ? '✓ ' + esc(t.owedBy.name) + ' pagou' : esc(t.owedBy.name) + ' te deve ' + fmt(+t.owedBy.amount || t.amount)}</div>` : '';
   const chk = ui.view === 'tx' && !r ? (ui.txType === 'medevem'
       ? `<button class="check ${t.owedBy?.received ? 'on' : ''}" data-a="recv" data-v="${t.id}" aria-label="Marcar como recebido">${ic('check')}</button>`
@@ -1173,8 +1199,8 @@ function fixedForm(f, kind) {
       { key: 'catId', label: 'Categoria', type: 'select', options: catOpts() },
       { key: 'accId', label: 'Conta', type: 'select', options: accOpts() }
     ],
-    onSave: v => { v.kind = 'sai'; v.day = Math.min(31, Math.max(1, v.day || 1)); if (f) Object.assign(f, v); else S.fixed.push({ id: uid(), since: ui.month, ...v }); },
-    onDelete: f ? () => { S.fixed = S.fixed.filter(x => x.id !== f.id); } : null
+    onSave: v => { v.kind = 'sai'; v.day = Math.min(31, Math.max(1, v.day || 1)); if (f) { Object.assign(f, v); syncFixedFuture(f); } else S.fixed.push({ id: uid(), since: ui.month, ...v }); },
+    onDelete: f ? () => { syncFixedFuture(f, true); S.fixed = S.fixed.filter(x => x.id !== f.id); } : null
   });
 }
 function incomeForm(f) {
@@ -1455,7 +1481,7 @@ document.addEventListener('click', e => {
     case 'dBack': if (!draft.editId) { draft.step = 1; renderAdd(); } break;
     case 'dMore': draft.more = !draft.more; renderAdd(); break;
     case 'dSave': saveDraft(); break;
-    case 'dDel': if (el.dataset.sure) { const t = S.tx.find(x => x.id === draft.editId); S.tx = S.tx.filter(x => x.id !== draft.editId); save(); closeSheet(); render(); toast('Lançamento excluído'); } else { el.dataset.sure = 1; el.textContent = 'Toque de novo pra confirmar'; } break;
+    case 'dDel': if (el.dataset.sure) { const t = S.tx.find(x => x.id === draft.editId); if (t?.fixedId) { const m = t.date.slice(0, 7); S.fixedSkip = S.fixedSkip || {}; (S.fixedSkip[m] = S.fixedSkip[m] || []).push(t.fixedId); } S.tx = S.tx.filter(x => x.id !== draft.editId); save(); closeSheet(); render(); toast('Lançamento excluído'); } else { el.dataset.sure = 1; el.textContent = 'Toque de novo pra confirmar'; } break;
     case 'editTx': { const t = S.tx.find(x => x.id === v); if (t) openAdd(t.type, t); break; }
     case 'txType': ui.txType = v; render(); break;
     case 'accF': ui.accF = ui.accF === v ? null : v; render(); break;
@@ -1464,8 +1490,10 @@ document.addEventListener('click', e => {
     case 'pay': { const m = ui.month; const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(v); const on = i < 0; if (!on) p.splice(i, 1); else { p.push(v); toast('Marcado como pago'); }
       if (v.startsWith('card:')) { const a = acc(v.slice(5)); if (a) S.tx.forEach(t => { if (t.accId === a.id && t.type === 'gasto' && invMonth(t, a) === m) t.paid = on; }); }
       save(); render(); break; }
-    case 'paidTx': { e.stopPropagation(); const t = S.tx.find(x => x.id === v); if (t) { t.paid = !isPaid(t); toast(t.paid ? 'Pago ✓' : 'Voltou pra a pagar'); save(); render(); } break; }
-    case 'recv': { e.stopPropagation(); const t = S.tx.find(x => x.id === v); if (t?.owedBy) { receive(t, !t.owedBy.received); save(); render(); } break; }
+    case 'paidTx': { const t = S.tx.find(x => x.id === v); if (t) { t.paid = !isPaid(t);
+      if (t.fixedId) { const m = t.date.slice(0, 7); const p = S.fixedPaid[m] = S.fixedPaid[m] || []; const i = p.indexOf(t.fixedId); if (t.paid && i < 0) p.push(t.fixedId); if (!t.paid && i >= 0) p.splice(i, 1); }
+      toast(t.paid ? 'Pago ✓' : 'Voltou pra a pagar'); save(); render(); } break; }
+    case 'recv': { const t = S.tx.find(x => x.id === v); if (t?.owedBy) { receive(t, !t.owedBy.received); save(); render(); } break; }
     case 'newFixed': fixedForm(null, 'sai'); break;
     case 'newIncome': incomeForm(); break;
     case 'newBox': boxForm(); break;
