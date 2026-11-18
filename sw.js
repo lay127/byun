@@ -1,5 +1,5 @@
 // Byun service worker: funciona offline depois da primeira visita
-const CACHE = 'byun-v12';
+const CACHE = 'byun-v13';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './config.js', './vendor/supabase.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon.png'

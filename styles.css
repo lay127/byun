@@ -385,3 +385,6 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .owe.ok{background:var(--green-soft);color:var(--green)}
 :root[data-theme="dark"] .owe{background:#3a3010;color:#f0c75a}
 :root[data-theme="dark"] .owe.ok{background:var(--green-soft);color:var(--green2)}
+
+.edit-amt{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--card);margin-left:8px;vertical-align:middle}
+.edit-amt svg{width:15px;height:15px}

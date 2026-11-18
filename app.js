@@ -96,6 +96,7 @@ const I = {
   arrowUp: '<path d="M7 17 17 7M8 7h9v9"/>', arrowDown: '<path d="M17 7 7 17M16 17H7V8"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
@@ -1074,7 +1075,8 @@ const sheetHead = t => `<div class="sheet-h"><h3>${t}</h3><button class="icon-bt
 /* lançamento rápido */
 function openAdd(type = 'gasto', t = null) {
   const def = S.accounts.find(a => a.id === S.defaultAcc) ? S.defaultAcc : S.accounts[0]?.id;
-  draft = t ? { type: t.type, cents: Math.round(t.amount * 100), catId: t.catId, accId: t.accId, note: t.note || '', date: t.date, parcelas: 1, more: true, step: 2, editId: t.id, paid: isPaid(t), owe: t.owedBy ? { on: true, name: t.owedBy.name, amount: moneyInput(t.owedBy.amount), received: !!t.owedBy.received } : { on: false, name: '', amount: '' } }
+  const grp = t && t.group ? S.tx.filter(x => x.group === t.group).sort((a, b) => a.date.localeCompare(b.date)) : null;
+  draft = t ? { type: t.type, cents: Math.round((grp ? sum(grp) : t.amount) * 100), catId: t.catId, accId: t.accId, note: t.note || '', date: grp ? grp[0].date : t.date, parcelas: grp ? grp.length : 1, groupId: t.group || null, more: true, step: 2, editId: t.id, paid: isPaid(t), owe: t.owedBy ? { on: true, name: t.owedBy.name, amount: moneyInput(t.owedBy.amount), received: !!t.owedBy.received } : { on: false, name: '', amount: '' } }
     : { type, cents: 0, catId: null, accId: def, note: '', date: ui.month === curKey() ? todayISO() : ui.month + '-01', parcelas: 1, more: false, step: 1, editId: null, paid: null, owe: { on: false, name: '', amount: '' } };
   openSheet('<div id="add"></div>'); renderAdd();
 }
@@ -1100,7 +1102,7 @@ function renderAdd() {
     return;
   }
   const a = acc(d.accId);
-  $('#add').innerHTML = head + tabs + `<div class="amount" data-a="dBack" style="cursor:pointer">${amt}</div><div class="amount-sub">${sub}</div>${cats}
+  $('#add').innerHTML = head + tabs + `<div class="amount" data-a="dBack" style="cursor:pointer">${amt}<span class="edit-amt">${ic('pencil')}</span></div><div class="amount-sub">${sub}</div>${cats}
     <div class="flabel">Conta</div><div class="chips">${S.accounts.map(x => `<button class="chip ${d.accId === x.id ? 'on' : ''}" data-a="dAcc" data-v="${x.id}"><span class="dot" style="background:${x.color}"></span>${esc(x.name)}</button>`).join('')}</div>
     <div class="details ${d.more ? 'open' : ''}"><button data-a="dMore">Data, nota e mais ${ic('down')}</button>
       ${d.more ? `<label class="fld"><span>Nota</span><input id="dNote" value="${esc(d.note)}" placeholder="Ex.: Uber pro metrô" maxlength="60"></label>
@@ -1110,10 +1112,10 @@ function renderAdd() {
       ${d.owe?.on ? `<div class="duo"><label class="fld" style="margin-top:0"><span>Quem</span><input id="dOweName" value="${esc(d.owe.name)}" placeholder="Nome" maxlength="30" list="peopleList"></label><label class="fld" style="margin-top:0"><span>Quanto</span><input id="dOweAmt" inputmode="decimal" value="${esc(d.owe.amount)}" placeholder="${moneyInput(v) || '0,00'}"></label></div>
       <datalist id="peopleList">${[...new Set(S.tx.filter(x => x.owedBy?.name).map(x => x.owedBy.name))].map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <span class="hint" style="display:block;margin-top:6px">Vazio = o valor inteiro.</span>` : ''}` : ''}
-      ${d.type === 'gasto' && isCredit(a) && !d.editId ? `<label class="fld"><span>Parcelas</span><select id="dParc">${Array.from({ length: 24 }, (_, i) => `<option value="${i + 1}" ${d.parcelas === i + 1 ? 'selected' : ''}>${i === 0 ? 'À vista' : `${i + 1}x de ${fmt(v / (i + 1))}`}</option>`).join('')}</select></label>` : ''}` : ''}
+      ${d.type === 'gasto' && isCredit(a) ? `<label class="fld"><span>Parcelas</span><select id="dParc">${Array.from({ length: 24 }, (_, i) => `<option value="${i + 1}" ${d.parcelas === i + 1 ? 'selected' : ''}>${i === 0 ? `1x de ${fmt(v)} (de uma vez)` : `${i + 1}x de ${fmt(v / (i + 1))}`}</option>`).join('')}</select>${d.groupId || (d.editId && d.parcelas > 1) ? '<span class="hint">O valor lá em cima é o total da compra. Mudar aqui refaz todas as parcelas.</span>' : ''}</label>` : ''}` : ''}
     </div>
     <button class="btn" data-a="dSave" ${d.cents ? '' : 'disabled'}>${d.editId ? 'Salvar' : d.type === 'gasto' ? 'Lançar gasto' : 'Lançar receita'}</button>
-    ${d.editId ? '<button class="btn ghost danger" data-a="dDel">Excluir lançamento</button>' : ''}`;
+    ${d.editId ? `<button class="btn ghost danger" data-a="dDel">${d.groupId ? 'Excluir compra (todas as parcelas)' : 'Excluir lançamento'}</button>` : ''}`;
 }
 function saveDraft() {
   const d = draft; if (!d || !d.cents) return;
@@ -1125,11 +1127,20 @@ function saveDraft() {
     if (d.owe?.on) t.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || 0, received: !!d.owe.received }; else delete t.owedBy;
     return t;
   };
-  if (d.editId) {
+  const credit = d.type === 'gasto' && isCredit(acc(d.accId));
+  if (!credit) d.parcelas = 1;
+  if (d.editId && !d.groupId && d.parcelas <= 1) {
     const t = S.tx.find(x => x.id === d.editId);
     extra(Object.assign(t, { type: d.type, amount, catId: d.type === 'gasto' ? d.catId : null, accId: d.accId, note: d.note.trim(), date: d.date }));
     toast('Lançamento atualizado');
+  } else if (d.editId && d.parcelas <= 1) {
+    // era parcelado e virou "de uma vez": junta tudo num lançamento só
+    const old = S.tx.find(x => x.id === d.editId);
+    S.tx = S.tx.filter(x => x.group !== d.groupId);
+    S.tx.push(extra({ id: d.editId, type: d.type, amount, catId: d.catId, accId: d.accId, note: d.note.trim(), date: d.date, at: old?.at || Date.now() }));
+    toast('Agora é uma compra de uma vez');
   } else if (d.parcelas > 1) {
+    if (d.editId) S.tx = S.tx.filter(x => d.groupId ? x.group !== d.groupId : x.id !== d.editId);   // refaz as parcelas
     const g = uid(), each = Math.round(amount / d.parcelas * 100) / 100;
     for (let i = 0; i < d.parcelas; i++) {
       const [y, m, dd] = d.date.split('-').map(Number); const k = addMonths(`${y}-${pad(m)}`, i);
@@ -1139,7 +1150,7 @@ function saveDraft() {
       if (i === 0 && d.owe?.on) tx.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || amount, received: false };
       S.tx.push(tx);
     }
-    toast(`${d.parcelas}x lançado`);
+    toast(d.editId ? `Refeito em ${d.parcelas}x` : `${d.parcelas}x lançado`);
   } else {
     S.tx.push(extra({ id: uid(), type: d.type, amount, catId: d.type === 'gasto' ? d.catId : null, accId: d.accId, note: d.note.trim(), date: d.date, at: Date.now() }));
     toast(d.type === 'gasto' ? 'Gasto lançado' : 'Receita lançada');
@@ -1478,10 +1489,10 @@ document.addEventListener('click', e => {
     case 'dKey': if (v === '⌫') draft.cents = Math.floor(draft.cents / 10); else if (draft.cents < 1e9) draft.cents = draft.cents * (v === '00' ? 100 : 10) + (v === '00' ? 0 : +v); renderAdd(); break;
     case 'dQuick': draft.cents += +v * 100; renderAdd(); break;
     case 'dNext': draft.step = 2; renderAdd(); break;
-    case 'dBack': if (!draft.editId) { draft.step = 1; renderAdd(); } break;
+    case 'dBack': draft.step = 1; renderAdd(); break;
     case 'dMore': draft.more = !draft.more; renderAdd(); break;
     case 'dSave': saveDraft(); break;
-    case 'dDel': if (el.dataset.sure) { const t = S.tx.find(x => x.id === draft.editId); if (t?.fixedId) { const m = t.date.slice(0, 7); S.fixedSkip = S.fixedSkip || {}; (S.fixedSkip[m] = S.fixedSkip[m] || []).push(t.fixedId); } S.tx = S.tx.filter(x => x.id !== draft.editId); save(); closeSheet(); render(); toast('Lançamento excluído'); } else { el.dataset.sure = 1; el.textContent = 'Toque de novo pra confirmar'; } break;
+    case 'dDel': if (el.dataset.sure) { const t = S.tx.find(x => x.id === draft.editId); if (t?.fixedId) { const m = t.date.slice(0, 7); S.fixedSkip = S.fixedSkip || {}; (S.fixedSkip[m] = S.fixedSkip[m] || []).push(t.fixedId); } S.tx = S.tx.filter(x => draft.groupId ? x.group !== draft.groupId : x.id !== draft.editId); save(); closeSheet(); render(); toast(draft?.groupId ? 'Compra excluída (todas as parcelas)' : 'Lançamento excluído'); } else { el.dataset.sure = 1; el.textContent = 'Toque de novo pra confirmar'; } break;
     case 'editTx': { const t = S.tx.find(x => x.id === v); if (t) openAdd(t.type, t); break; }
     case 'txType': ui.txType = v; render(); break;
     case 'accF': ui.accF = ui.accF === v ? null : v; render(); break;
