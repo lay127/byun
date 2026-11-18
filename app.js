@@ -592,10 +592,10 @@ function syncFixedFuture(f, removed) {
 }
 function billsList(N) {
   // fixos no cartão já estão dentro da fatura, então não aparecem duas vezes
-  const items = N.fixOutList.filter(f => !isCredit(acc(f.accId))).map(f => { const t = fixedTx(f, N.m); return { id: f.id, tx: t?.id, paid: t ? isPaid(t) : N.paid.includes(f.id), name: f.name, amount: t ? t.amount : f.amount, day: +f.day || 1, icon: cat(f.catId)?.icon || '📌', sub: acc(f.accId)?.name || 'fixo' }; });
+  const items = N.fixOutList.filter(f => !isCredit(acc(f.accId))).map(f => { const t = fixedTx(f, N.m); return { id: f.id, tx: t?.id, open: t ? `editTx|${t.id}` : `editFixed|${f.id}`, paid: t ? isPaid(t) : N.paid.includes(f.id), name: f.name, amount: t ? t.amount : f.amount, day: +f.day || 1, icon: cat(f.catId)?.icon || '📌', sub: acc(f.accId)?.name || 'fixo' }; });
   S.accounts.filter(isCredit).forEach(a => {
     const v = invoice(a, N.m);
-    if (v > 0) items.push({ id: 'card:' + a.id, paid: N.paid.includes('card:' + a.id), name: 'Fatura ' + a.name, amount: v, day: +a.due || 10, icon: '💳', sub: 'compras e fixos do cartão' });
+    if (v > 0) items.push({ id: 'card:' + a.id, open: `invoice|${a.id}|${N.m}`, paid: N.paid.includes('card:' + a.id), name: 'Fatura ' + a.name, amount: v, day: +a.due || 10, icon: '💳', sub: 'compras e fixos do cartão' });
   });
   return items.sort((a, b) => a.day - b.day);
 }
@@ -611,7 +611,7 @@ function billsCard(N) {
     ${items.length ? `<div class="saldo-big" style="font-size:28px">${money(sum(pend))}</div>
     <div class="sub" style="margin-bottom:12px">${items.length - pend.length} de ${items.length} pagas</div>
     <div class="days">${days.map(d => { const its = items.filter(x => x.day === d); const done = its.every(x => x.paid); return `<button class="${ui.payDay === d ? 'on' : ''} ${done ? 'done' : ''}" data-a="payDay" data-v="${d}">${pad(d)}<em>${'•'.repeat(Math.min(5, its.length))}</em></button>`; }).join('')}</div>
-    ${shown.map(x => { const p = x.paid; return `<div class="row ${p ? 'paid' : ''}"><button class="check ${p ? 'on' : ''}" data-a="${x.tx ? 'paidTx' : 'pay'}" data-v="${x.tx || x.id}" aria-label="Marcar como paga">${ic('check')}</button><div class="l"><div class="n">${esc(x.name)}</div><div class="d">dia ${pad(x.day)} · ${esc(x.sub)}</div></div><div class="v">${fmt(x.amount)}</div></div>`; }).join('')}`
+    ${shown.map(x => { const p = x.paid; const [oa, ...ov] = (x.open || '').split('|'); return `<div class="row tap ${p ? 'paid' : ''}" data-a="${oa}" data-v="${ov.join('|')}"><button class="check ${p ? 'on' : ''}" data-a="${x.tx ? 'paidTx' : 'pay'}" data-v="${x.tx || x.id}" aria-label="Marcar como paga">${ic('check')}</button><div class="l"><div class="n">${esc(x.name)}</div><div class="d">dia ${pad(x.day)} · ${esc(x.sub)}</div></div><div class="v">${fmt(x.amount)}</div></div>`; }).join('')}`
       : `<div class="empty"><b>Nenhuma conta cadastrada</b>Aluguel, assinaturas e faturas aparecem aqui com o dia de vencimento.</div>`}
   </section>`;
 }
@@ -1103,7 +1103,9 @@ function renderAdd() {
   const amt = fmt(v);
   const tabs = `<div class="seg"><button class="${d.type === 'gasto' ? 'on' : ''}" data-a="dType" data-v="gasto">Gasto</button><button class="${d.type === 'receita' ? 'on' : ''}" data-a="dType" data-v="receita">Receita</button></div>`;
   const cats = d.type === 'gasto' ? `<div class="flabel">Categoria</div><div class="cats">${S.categories.map(c => `<button class="${d.catId === c.id ? 'on' : ''}" data-a="dCat" data-v="${c.id}"><i>${esc(c.icon)}</i><span>${esc(c.name.split(' ')[0])}</span></button>`).join('')}<button data-a="newCat"><i>+</i><span>Nova</span></button></div>` : '';
-  const head = sheetHead(d.editId ? 'Editar lançamento' : 'Novo lançamento');
+  const fx = d.editId ? S.fixed.find(f => f.id === S.tx.find(t => t.id === d.editId)?.fixedId) : null;
+  if (fx) sub = 'Conta fixa: não entra no Pode gastar do dia a dia';
+  const head = sheetHead(d.editId ? 'Editar lançamento' : 'Novo lançamento') + (fx ? `<div class="origin">${ic('repeat')}<div><b>Lançado pela conta fixa "${esc(fx.name)}"</b><span>Todo dia ${pad(fx.day || 1)} · ${fmt(fx.amount)}. Mudar aqui vale só pra este mês.</span></div><button class="link" data-a="editFixed" data-v="${fx.id}">Ver conta fixa</button></div>` : '');
   if (d.step === 1) {
     $('#add').innerHTML = head + tabs + `<div class="amount ${d.cents ? '' : 'zero'}">${amt}<span class="caret"></span></div><div class="amount-sub">${sub}</div>${cats}
       <div class="quick">${[10, 20, 50, 100].map(q => `<button data-a="dQuick" data-v="${q}">+${q}</button>`).join('')}</div>
@@ -1117,7 +1119,7 @@ function renderAdd() {
     <div class="details ${d.more ? 'open' : ''}"><button data-a="dMore">Data, nota e mais ${ic('down')}</button>
       ${d.more ? `<label class="fld"><span>Nota</span><input id="dNote" value="${esc(d.note)}" placeholder="Ex.: Uber pro metrô" maxlength="60"></label>
       <label class="fld"><span>Data</span><input id="dDate" type="date" value="${d.date}"></label>
-      ${d.type === 'gasto' ? `<label class="switch"><div><div class="n">Já pago</div><div class="d">${isCredit(a) ? 'No cartão, fica pago quando a fatura é paga' : 'Débito e pix já saem pagos'}</div></div><span class="tgl"><input type="checkbox" id="dPaid" ${(d.paid ?? !isCredit(a)) ? 'checked' : ''}><i></i></span></label>
+      ${d.type === 'gasto' ? `<label class="switch"><div><div class="n">Já pago</div><div class="d">${fx ? 'Também marca em Contas a pagar' : isCredit(a) ? 'No cartão, fica pago quando a fatura é paga' : 'Débito e pix já saem pagos'}</div></div><span class="tgl"><input type="checkbox" id="dPaid" ${(d.paid ?? !isCredit(a)) ? 'checked' : ''}><i></i></span></label>
       <label class="switch"><div><div class="n">Alguém me deve isso</div><div class="d">Ex.: dividiu a conta, pagou por alguém</div></div><span class="tgl"><input type="checkbox" id="dOweOn" ${d.owe?.on ? 'checked' : ''}><i></i></span></label>
       ${d.owe?.on ? `<div class="duo"><label class="fld" style="margin-top:0"><span>Quem</span><input id="dOweName" value="${esc(d.owe.name)}" placeholder="Nome" maxlength="30" list="peopleList"></label><label class="fld" style="margin-top:0"><span>Quanto</span><input id="dOweAmt" inputmode="decimal" value="${esc(d.owe.amount)}" placeholder="${moneyInput(v) || '0,00'}"></label></div>
       <datalist id="peopleList">${[...new Set(S.tx.filter(x => x.owedBy?.name).map(x => x.owedBy.name))].map(n => `<option value="${esc(n)}">`).join('')}</datalist>
@@ -1527,7 +1529,7 @@ document.addEventListener('click', e => {
     case 'delMove': if (el.dataset.sure) { const m = S.moves.find(x => x.id === v); S.moves = S.moves.filter(x => x.id !== v); save(); closeSheet(); render(); if (m) boxSheet(m.boxId); } else { el.dataset.sure = 1; el.querySelector('.n').textContent = 'Toque de novo pra apagar'; } break;
     case 'obAddIncome': obData().incomes.push({ name: '', amount: '', rule: 'util5', day: '5' }); render(); break;
     case 'obDelIncome': obData().incomes.splice(+v, 1); render(); break;
-    case 'editFixed': fixedForm(S.fixed.find(x => x.id === v)); break;
+    case 'editFixed': closeSheet(); fixedForm(S.fixed.find(x => x.id === v)); break;
     case 'newExtra': extraForm(); break;
     case 'editExtra': extraForm(S.extras.find(x => x.id === v)); break;
     case 'newCat': catForm(); break;
