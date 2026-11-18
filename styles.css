@@ -574,3 +574,10 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .ob.wake{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;margin:0;max-width:none;padding:24px;z-index:5}
 /* telas sem a barra lateral (entrar, trocar senha, primeiro acesso): centralizadas */
 @media (min-width:1100px){ body:not(:has(.nav)) #app{margin:0 auto;max-width:480px;padding-left:20px;padding-right:20px} }
+/* categoria em lista suspensa no computador */
+.cat-sel{display:none}
+@media (hover:hover) and (pointer:fine){
+  #add .cats{display:none}
+  .cat-sel{display:block;width:100%;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:15px;padding:0 40px 0 14px;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;margin-bottom:6px}
+  .cat-sel:focus{outline:2px solid var(--green2);outline-offset:1px}
+}

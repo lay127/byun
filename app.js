@@ -1212,6 +1212,10 @@ function openAdd(type = 'gasto', t = null) {
     : { type, cents: 0, catId: null, accId: def, note: '', date: ui.month === curKey() ? todayISO() : ui.month + '-01', parcelas: 1, more: false, step: 1, editId: null, paid: null, owe: { on: false, name: '', amount: '' } };
   openSheet('<div id="add"></div>'); renderAdd();
 }
+function bindCatSel() {
+  const el = $('#catSel'); if (!el) return;
+  el.onchange = () => { if (el.value === '__new') { el.value = draft.catId || ''; catForm(); return; } draft.catId = el.value || null; renderAdd(); };
+}
 function renderAdd() {
   const d = draft; if (!d) return;
   const N = info(d.date.slice(0, 7)); const v = d.cents / 100;
@@ -1222,9 +1226,9 @@ function renderAdd() {
     if (c) { const used = (N.byCat.find(x => x.c.id === c.id)?.v || 0) - (editing && editing.catId === c.id ? editing.amount : 0); const rest = c.limit - used - v; sub = c.limit > 0 ? (rest >= 0 ? `${esc(c.name)}: sobram <b>${fmt(rest)}</b> de ${fmt0(c.limit)}` : `${esc(c.name)}: passa <b class="neg">${fmt(-rest)}</b> do limite de ${fmt0(c.limit)}`) : `${esc(c.name)}: sem limite definido`; }
     else sub = `Pode gastar no mês: <b>${fmt(N.pode + (editing ? editing.amount : 0) - v)}</b>`;
   } else sub = 'Dinheiro que entrou na conta';
-  const amt = fmt(v);
+  const amt = brl.format(v || 0).replace(/\u00a0/g, ' ');   // o valor digitado aparece mesmo com os valores escondidos
   const tabs = `<div class="seg"><button class="${d.type === 'gasto' ? 'on' : ''}" data-a="dType" data-v="gasto">Gasto</button><button class="${d.type === 'receita' ? 'on' : ''}" data-a="dType" data-v="receita">Receita</button></div>`;
-  const cats = d.type === 'gasto' ? `<div class="flabel">Categoria</div><div class="cats">${S.categories.map(c => `<button class="${d.catId === c.id ? 'on' : ''}" data-a="dCat" data-v="${c.id}"><i>${esc(c.icon)}</i><span>${esc(c.name.split(' ')[0])}</span></button>`).join('')}<button data-a="newCat"><i>+</i><span>Nova</span></button></div>` : '';
+  const cats = d.type === 'gasto' ? `<div class="flabel">Categoria</div><div class="cats">${S.categories.map(c => `<button class="${d.catId === c.id ? 'on' : ''}" data-a="dCat" data-v="${c.id}"><i>${esc(c.icon)}</i><span>${esc(c.name.split(' ')[0])}</span></button>`).join('')}<button data-a="newCat"><i>+</i><span>Nova</span></button></div><select class="cat-sel" id="catSel" aria-label="Categoria"><option value="">Sem categoria</option>${S.categories.map(c => `<option value="${c.id}" ${d.catId === c.id ? 'selected' : ''}>${esc(c.icon)}  ${esc(c.name)}</option>`).join('')}<option value="__new">＋ Nova categoria</option></select>` : '';
   const fx = d.editId ? S.fixed.find(f => f.id === S.tx.find(t => t.id === d.editId)?.fixedId) : null;
   if (fx) sub = 'Conta fixa: não entra no Pode gastar do dia a dia';
   const head = sheetHead(d.editId ? 'Editar lançamento' : 'Novo lançamento') + (fx ? `<div class="origin">${ic('repeat')}<div><b>Lançado pela conta fixa "${esc(fx.name)}"</b><span>${noDate(fx) ? 'Sem data' : 'Todo dia ' + pad(fx.day || 1)} · ${fmt(fx.amount)}. Mudar aqui vale só pra este mês.</span></div><button class="link" data-a="editFixed" data-v="${fx.id}">Ver conta fixa</button></div>` : '');
@@ -1233,6 +1237,7 @@ function renderAdd() {
       <div class="quick">${[10, 20, 50, 100].map(q => `<button data-a="dQuick" data-v="${q}">+${q}</button>`).join('')}</div>
       <div class="pad">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫'].map(k => `<button data-a="dKey" data-v="${k}" ${k === '⌫' ? 'aria-label="Apagar"' : ''}>${k}</button>`).join('')}</div>
       <button class="btn" data-a="dNext" ${d.cents ? '' : 'disabled'}>Continuar</button>`;
+    bindCatSel();
     return;
   }
   const a = acc(d.accId);
@@ -1253,6 +1258,7 @@ function renderAdd() {
     <button class="btn" data-a="dSave" ${d.cents ? '' : 'disabled'}>${d.editId ? 'Salvar' : d.type === 'gasto' ? 'Lançar gasto' : 'Lançar receita'}</button>
     ${d.editId ? `<button class="btn ghost" data-a="dDup">${ic('copy')} Duplicar lançamento</button>` : ''}
     ${d.editId ? `<button class="btn ghost danger" data-a="dDel">${d.groupId ? 'Excluir compra (todas as parcelas)' : 'Excluir lançamento'}</button>` : ''}`;
+  bindCatSel();
 }
 function partsBlock(d) {
   const t = S.tx.find(x => x.id === d.editId); if (!t) return '';
