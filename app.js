@@ -210,7 +210,9 @@ async function boot() {
   if (session) enter(session.user); else { ui.auth = 'login'; render(); }
 }
 
-const ui = { view: 'home', month: curKey(), txType: 'all', q: '', accF: null, catF: null, msgI: 0, ob: 0, payDay: null, card: 0 };
+const VIEWS = ['home', 'tx', 'charts', 'plan', 'settings', 'install', 'cardsFull', 'boxesFull'];
+const saved = (() => { try { return JSON.parse(sessionStorage.getItem('byun.ui') || '{}'); } catch (e) { return {}; } })();
+const ui = { view: VIEWS.includes(saved.view) ? saved.view : 'home', month: /^\d{4}-\d{2}$/.test(saved.month || '') ? saved.month : curKey(), txType: 'all', q: '', accF: null, catF: null, msgI: 0, ob: 0, payDay: null, card: 0 };
 let draft = null, deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; });
 
@@ -511,6 +513,7 @@ function render() {
   if (CLOUD && (!user || ui.auth)) { app.innerHTML = authView(); return; }
   if (CLOUD && isAdmin) { app.innerHTML = adminView(); return; }
   if (!S.onboarded) { app.innerHTML = onboarding(); return; }
+  try { sessionStorage.setItem('byun.ui', JSON.stringify({ view: ui.view, month: ui.month })); } catch (e) { }
   const views = { cardsFull: cardsFullView, boxesFull: boxesFullView, home: homeView, tx: txView, charts: chartsView, plan: planView, settings: settingsView, install: installView };
   app.innerHTML = (views[ui.view] || homeView)() + nav();
   requestAnimationFrame(drawCharts);
