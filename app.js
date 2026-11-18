@@ -770,8 +770,7 @@ function isPaid(t) {
 }
 const owes = t => t.owedBy && t.owedBy.name && !t.owedBy.received;
 function debts(m = ui.month) {
-  const end = `${m}-31`;
-  const unpaid = S.tx.filter(t => t.type === 'gasto' && t.date <= end && !isPaid(t));
+  const unpaid = S.tx.filter(t => t.type === 'gasto' && t.date.slice(0, 7) === m && !isPaid(t));   // só o mês que está aberto na tela
   const owed = S.tx.filter(owes);
   const people = {}; owed.forEach(t => { const k = t.owedBy.name.trim(); (people[k] = people[k] || { name: k, v: 0, n: 0 }); people[k].v += +t.owedBy.amount || t.amount; people[k].n++; });
   return { unpaid, devo: sum(unpaid), owed, meDevem: sum(owed, t => +t.owedBy.amount || t.amount), people: Object.values(people).sort((a, b) => b.v - a.v) };
@@ -817,7 +816,7 @@ function txView() {
   return topbar() + `<h1>Transações</h1>
     <label class="search">${ic('search')}<input id="q" type="search" placeholder="Buscar por nota, categoria ou conta" value="${esc(ui.q)}" autocomplete="off"></label>
     <div class="debt-tiles">
-      <button class="kpi ${ui.txType === 'apagar' ? 'on' : ''}" data-a="txType" data-v="apagar"><div class="k">Você deve</div><div class="v ${DB.devo ? 'neg' : ''}">${fmt(DB.devo)}</div><div class="s">${DB.unpaid.length ? `${DB.unpaid.length} a pagar até ${monthName(ui.month).toLowerCase()}` : 'tudo pago ✓'}</div></button>
+      <button class="kpi ${ui.txType === 'apagar' ? 'on' : ''}" data-a="txType" data-v="apagar"><div class="k">Você deve</div><div class="v ${DB.devo ? 'neg' : ''}">${fmt(DB.devo)}</div><div class="s">${DB.unpaid.length ? `${DB.unpaid.length} a pagar em ${monthName(ui.month).toLowerCase()}` : 'tudo pago ✓'}</div></button>
       <button class="kpi ${ui.txType === 'medevem' ? 'on' : ''}" data-a="txType" data-v="medevem"><div class="k">Te devem</div><div class="v ${DB.meDevem ? 'pos' : ''}">${fmt(DB.meDevem)}</div><div class="s">${DB.people.length ? DB.people.slice(0, 2).map(p => esc(p.name)).join(', ') + (DB.people.length > 2 ? ` e +${DB.people.length - 2}` : '') : 'ninguém'}</div></button>
     </div>
     ${ui.txType === 'medevem' && DB.people.length ? `<div class="chips">${DB.people.map(p => `<span class="chip">${esc(p.name)} · ${fmt(p.v)}</span>`).join('')}</div>` : ''}
