@@ -481,6 +481,16 @@ function render() {
 }
 
 /* ---------- Início ---------- */
+// quanto menos gasto em relação ao ritmo ideal, mais alto e mais rápido o Byun pula
+function hopStyle(N, md) {
+  let e;
+  if (N.limit > 0 && N.gasto > N.limit) e = .05;                  // estourou: quase não sai do chão
+  else if (!N.isCur || N.expected <= 0) e = N.gasto === 0 ? 1 : .6;
+  else e = Math.max(.08, Math.min(1, 1.5 - N.gasto / N.expected)); // 50% do ritmo = pula muito, acima do ritmo = pulinho
+  if (md === 'sleepy') e = Math.min(e, .2);
+  const hop = Math.round(3 + 30 * e), dur = (2.8 - 1.4 * e).toFixed(2);
+  return `--hop:${hop}px;--dur:${dur}s`;
+}
 function homeView() {
   const N = info(), md = mood(N);
   const frac = N.limit > 0 ? Math.max(0, Math.min(1, N.pode / N.limit)) : 0;
@@ -494,7 +504,7 @@ function homeView() {
     <div class="bubble" data-a="poke">${esc(fala(N, md))}</div>
     <div class="gauge ${petCls()}">
       <svg class="arc ${N.pode < 0 ? 'over' : ''}" viewBox="0 0 240 240"><path class="trk" d="M46.46 193.54 A104 104 0 1 1 193.54 193.54" fill="none" stroke-width="11" stroke-linecap="round" pathLength="100"/><path class="val" d="M46.46 193.54 A104 104 0 1 1 193.54 193.54" fill="none" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="${N.pode < 0 ? 100 : (frac * 100).toFixed(2)} 200"/></svg>
-      <div class="byun-wrap ${S.motion === 'bounce' ? 'bounce' : ''}" data-a="poke">${byunSVG(md)}</div>
+      <div class="byun-wrap ${S.motion === 'bounce' ? 'bounce' : ''}" data-a="poke" style="${S.motion === 'bounce' ? hopStyle(N, md) : ''}">${byunSVG(md)}</div>
     </div>
     <div class="label">Pode gastar</div>
     <div class="big">${money(N.pode)}</div>

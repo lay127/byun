@@ -353,9 +353,9 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .card.flash{animation:flash 1s}
 @keyframes flash{0%,100%{box-shadow:0 0 0 0 transparent}30%{box-shadow:0 0 0 3px var(--green)}}
 /* Byun pulandinho */
-.byun-wrap.bounce .byun{animation:hop 1.6s cubic-bezier(.3,0,.3,1) infinite;transform-origin:50% 100%}
-.byun-wrap.bounce:after{content:'';position:absolute;left:50%;bottom:-6px;width:90px;height:10px;margin-left:-45px;border-radius:50%;background:rgba(0,0,0,.12);animation:shadow 1.6s cubic-bezier(.3,0,.3,1) infinite;z-index:-1}
-@keyframes hop{0%,100%{transform:translateY(0) scale(1.04,.96)}12%{transform:translateY(0) scale(.97,1.03)}40%{transform:translateY(-22px) scale(1,1)}68%{transform:translateY(0) scale(1.06,.94)}80%{transform:translateY(0) scale(1,1)}}
+.byun-wrap.bounce .byun{animation:hop var(--dur,1.6s) cubic-bezier(.3,0,.3,1) infinite;transform-origin:50% 100%}
+.byun-wrap.bounce:after{content:'';position:absolute;left:50%;bottom:-6px;width:90px;height:10px;margin-left:-45px;border-radius:50%;background:rgba(0,0,0,.12);animation:shadow var(--dur,1.6s) cubic-bezier(.3,0,.3,1) infinite;z-index:-1}
+@keyframes hop{0%,100%{transform:translateY(0) scale(1.04,.96)}12%{transform:translateY(0) scale(.97,1.03)}40%{transform:translateY(calc(-1 * var(--hop,22px))) scale(1,1)}68%{transform:translateY(0) scale(1.06,.94)}80%{transform:translateY(0) scale(1,1)}}
 @keyframes shadow{0%,100%,68%{transform:scale(1);opacity:1}40%{transform:scale(.6);opacity:.5}}
 
 /* Planejar: resumo com espaço entre os botões e os totais */
