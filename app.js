@@ -250,9 +250,19 @@ function boxesInfo(m = ui.month) {
 
 /* ---------- cálculos do mês ---------- */
 function extrasFor(m) { return S.extras.filter(e => e.recurring ? (!e.since || e.since <= m) : e.month === m); }
-function invMonth(t, a) { const d = +t.date.slice(8); return a.closing && d > a.closing ? addMonths(t.date.slice(0, 7), 1) : t.date.slice(0, 7); }
+// a fatura recebe o nome do mês em que VENCE:
+// 1) compra depois do dia de fechamento vai pro ciclo seguinte
+// 2) se o vencimento é num dia menor ou igual ao fechamento (ex.: fecha 26, vence 2), ele cai no mês seguinte ao fechamento
+function invMonth(t, a) {
+  const d = +t.date.slice(8), C = +a.closing || 0, V = +a.due || 0;
+  let k = t.date.slice(0, 7);
+  if (C && d > C) k = addMonths(k, 1);
+  if (C && V && V <= C) k = addMonths(k, 1);
+  return k;
+}
+const dueDate = (a, m) => `${pad(Math.min(+a.due || 10, dim(m)))}/${m.slice(5)}`;
 function invoice(a, m) { return sum(S.tx.filter(t => t.accId === a.id && t.type === 'gasto' && invMonth(t, a) === m)); }
-function cardOpenMonth(a) { const t = todayISO(); return a.closing && +t.slice(8) > a.closing ? addMonths(t.slice(0, 7), 1) : t.slice(0, 7); }
+function cardOpenMonth(a) { return invMonth({ date: todayISO() }, a); }
 function cardFree(a) {
   const open = cardOpenMonth(a);
   const used = sum(S.tx.filter(t => t.accId === a.id && t.type === 'gasto' && invMonth(t, a) >= open && !(S.fixedPaid[invMonth(t, a)] || []).includes('card:' + a.id)));
@@ -622,7 +632,7 @@ function cardsCard() {
       ${cards.map((c, i) => `<div class="ccard" data-a="invoice" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
         <div class="top-r"><span>${esc(c.name)}</span><span class="st">${i === ui.card && fechada ? 'Fechada' : 'Aberta'}</span></div>
         <div class="chip-i"></div>
-        <div class="bot"><div>Vence<b>${pad(c.due || 10)}/${pad(+cardOpenMonth(c).slice(5))}</b></div><div style="text-align:right">Limite livre<b>${fmt(cardFree(c))}</b></div></div>
+        <div class="bot"><div>Vence<b>${dueDate(c, cardOpenMonth(c))}</b></div><div style="text-align:right">Limite livre<b>${fmt(cardFree(c))}</b></div></div>
       </div>`).join('')}
       <div class="ccard add" data-a="newAcc" data-v="credito">+ Novo cartão</div>
     </div>
@@ -642,7 +652,7 @@ function invoiceSheet(accId, m) {
   const paidKey = 'card:' + a.id, paid = (S.fixedPaid[m] || []).includes(paidKey);
   openSheet(sheetHead(esc(a.name)) + `
     <div class="chips inv-months">${months.map(k => `<button class="chip ${k === m ? 'on' : ''}" data-a="invoice" data-v="${a.id}|${k}">${MES3[+k.slice(5) - 1]}${k.slice(0, 4) !== curKey().slice(0, 4) ? ' ' + k.slice(2, 4) : ''}</button>`).join('')}</div>
-    <div class="sub" style="margin-top:6px">Fatura de ${monthName(m).toLowerCase()} · vence ${pad(a.due || 10)}/${m.slice(5)}${paid ? ' · <b class="pos">paga</b>' : ''}</div>
+    <div class="sub" style="margin-top:6px">Fatura de ${monthName(m).toLowerCase()} · vence ${dueDate(a, m)}${paid ? ' · <b class="pos">paga</b>' : ''}</div>
     <div class="saldo-big">${money(total)}</div>
     ${cats.length > 1 ? `<div class="chips" style="margin-top:10px">${cats.map(x => `<span class="chip">${esc(x.c?.icon || '📦')} ${fmt0(x.v)}</span>`).join('')}</div>` : ''}
     <div class="flabel">${list.length} ${list.length === 1 ? 'compra' : 'compras'} nessa fatura</div>
@@ -1305,7 +1315,7 @@ function accForm(a, type = 'conta') {
       { key: 'name', label: 'Nome', req: true, max: 30, ph: 'Ex.: Cartão Santander' },
       { key: 'color', label: 'Cor', type: 'colors', options: [...new Set(BANKS.map(b => b[2]))].slice(0, 9) },
       { key: 'limit', label: 'Limite do cartão', type: 'money' },
-      { key: 'closing', label: 'Dia que a fatura fecha (1 a 31)', type: 'number', req: true, reqIf: f => f.querySelector('[name=type]:checked')?.value === 'credito', hint: 'Compras depois desse dia vão pra próxima fatura' },
+      { key: 'closing', label: 'Dia que a fatura fecha (1 a 31)', type: 'number', req: true, reqIf: f => f.querySelector('[name=type]:checked')?.value === 'credito', hint: 'Compras depois desse dia vão pra próxima fatura. Se o vencimento for num dia antes do fechamento (ex.: fecha 26, vence 3), a fatura vence no mês seguinte.' },
       { key: 'due', label: 'Dia do vencimento (1 a 31)', type: 'number', req: true, reqIf: f => f.querySelector('[name=type]:checked')?.value === 'credito' },
       { key: 'isDefault', label: 'Conta padrão nos lançamentos', type: 'toggle', disabled: !!other, hint: other ? `A padrão hoje é ${esc(other.name)}. Pra trocar, abra ela e desligue a opção lá.` : 'Já vem selecionada quando você lança um gasto.' }
     ],
