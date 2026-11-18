@@ -984,10 +984,10 @@ function chartsView() {
     <section class="card"><div class="card-h"><span class="t">${ic('piggy')} Dinheiro guardado</span></div>
       <div class="ch-legend"><span><i style="background:var(--s7)"></i>Total no cofrinho</span></div>
       ${(S.boxes || []).length ? '<div class="chart" data-chart="boxes"></div>' : '<div class="empty">Crie uma caixinha no Início pra acompanhar.</div>'}</section>
-    </div>
     <section class="card"><div class="card-h"><span class="t">${ic('repeat')} Últimos 6 meses</span></div>
       <div class="ch-legend"><span><i class="sq" style="background:var(--green2)"></i>Entradas</span><span><i class="sq" style="background:var(--ink)"></i>Saídas</span></div>
-      <div class="chart" data-chart="months"></div></section>`;
+      <div class="chart" data-chart="months"></div></section>
+    </div>`;
 }
 
 /* gráficos em SVG puro, com tooltip */
