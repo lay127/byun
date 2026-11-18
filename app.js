@@ -47,13 +47,16 @@ const addMonths = (key, n) => { let [y, m] = key.split('-').map(Number); m += n;
 const dim = key => { const [y, m] = key.split('-').map(Number); return new Date(y, m, 0).getDate(); };
 const monthName = key => MESES[+key.slice(5) - 1];
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmt = v => brl.format(v || 0).replace(/ /g, ' ');
-const fmt0 = v => 'R$ ' + Math.round(v || 0).toLocaleString('pt-BR');
-const short = v => { const a = Math.abs(v); if (a >= 1000) return (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'; return Math.round(v).toString(); };
+let HIDE = false; try { HIDE = localStorage.getItem('byun.hide') === '1'; } catch (e) { }
+const MASK = 'R$ ••••';
+const fmt = v => HIDE ? MASK : brl.format(v || 0).replace(/\u00a0/g, ' ');
+const fmt0 = v => HIDE ? MASK : 'R$ ' + Math.round(v || 0).toLocaleString('pt-BR');
+const short = v => { if (HIDE) return '•••'; const a = Math.abs(v); if (a >= 1000) return (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'; return Math.round(v).toString(); };
 const sum = (arr, f = x => x.amount) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
 function money(v, cls = '') {
+  if (HIDE) return `<span class="money masked ${cls}">R$ ••••</span>`;
   const s = fmt(Math.abs(v)); const i = s.lastIndexOf(',');
   return `<span class="money ${cls}">${v < 0 ? '-' : ''}${s.slice(0, i)}<small>${s.slice(i)}</small></span>`;
 }
@@ -91,6 +94,8 @@ const I = {
   house: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   arrowUp: '<path d="M7 17 17 7M8 7h9v9"/>', arrowDown: '<path d="M17 7 7 17M16 17H7V8"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
@@ -456,9 +461,9 @@ async function updateAppIcon(pet) {
 /* ---------- moldura ---------- */
 function topbar(title) {
   if (title) return `<div class="top"><button class="icon-btn" data-a="go" data-v="home" aria-label="Voltar">${ic('left')}</button><b>${title}</b><span style="width:40px"></span></div>`;
-  return `<div class="top"><button class="icon-btn flat" data-a="theme" aria-label="Tema">${ic(S.theme === 'dark' ? 'sun' : 'moon')}</button>
+  return `<div class="top main"><div class="tl"><button class="icon-btn flat" data-a="theme" aria-label="Tema">${ic(S.theme === 'dark' ? 'sun' : 'moon')}</button></div>
     <div class="month"><button class="icon-btn flat" data-a="month" data-v="-1" aria-label="Mês anterior">${ic('left')}</button><span>${monthName(ui.month)}${ui.month.slice(0, 4) !== curKey().slice(0, 4) ? ' ' + ui.month.slice(0, 4) : ''}</span><button class="icon-btn flat" data-a="month" data-v="1" aria-label="Próximo mês">${ic('right')}</button></div>
-    <button class="icon-btn" data-a="go" data-v="settings" aria-label="Ajustes">${ic('gear')}</button></div>`;
+    <div class="tr"><button class="icon-btn flat" data-a="hide" aria-label="${HIDE ? 'Mostrar valores' : 'Esconder valores'}">${ic(HIDE ? 'eyeOff' : 'eye')}</button><button class="icon-btn" data-a="go" data-v="settings" aria-label="Ajustes">${ic('gear')}</button></div></div>`;
 }
 function nav() {
   const b = (v, i, l) => `<button class="${ui.view === v ? 'on' : ''}" data-a="go" data-v="${v}" aria-label="${l}">${ic(i)}</button>`;
@@ -509,7 +514,6 @@ function homeView() {
     <div class="label">Pode gastar</div>
     <div class="big">${money(N.pode)}</div>
     <div class="sub">${sub}</div>${pill}
-    ${N.BX.list.length ? `<button class="box-pill" data-a="goBoxes">🐷 <b>${fmt0(N.BX.total)}</b> guardado <span>+${fmt(N.BX.est)}/mês</span></button>` : `<button class="box-pill" data-a="newBox">🐷 Criar meu cofrinho</button>`}
   </section>
   <div class="qa">
     <button data-a="add" data-v="gasto"><i>${ic('minus')}</i>Gasto</button>
@@ -1374,6 +1378,7 @@ document.addEventListener('click', e => {
   switch (a) {
     case 'go': ui.view = v; window.scrollTo(0, 0); if (v === 'tx') { ui.accF = ui.catF = null; } render(); break;
     case 'month': ui.month = addMonths(ui.month, +v); ui.msgI = 0; render(); break;
+    case 'hide': HIDE = !HIDE; try { localStorage.setItem('byun.hide', HIDE ? '1' : '0'); } catch (er) { } render(); break;
     case 'theme': S.theme = S.theme === 'dark' ? 'light' : 'dark'; save(); render(); break;
     case 'setTheme': S.theme = v; save(); render(); break;
     case 'setMotion': S.motion = v; save(); document.querySelectorAll('.byun .eyes').forEach(g => g.removeAttribute('transform')); render(); break;
