@@ -780,7 +780,7 @@ const oweLeft = t => Math.max(0, r2(oweTotal(t) - partsSum(t.owedBy?.parts)));
 const owes = t => t.owedBy && t.owedBy.name && !t.owedBy.received && oweLeft(t) > 0;
 function debts(m = ui.month) {
   const unpaid = S.tx.filter(t => t.type === 'gasto' && t.date.slice(0, 7) === m && !isPaid(t));   // só o mês que está aberto na tela
-  const owed = S.tx.filter(owes);
+  const owed = S.tx.filter(t => owes(t) && t.date.slice(0, 7) <= m);   // aparece a partir do mês em que a dívida surgiu
   const people = {}; owed.forEach(t => { const k = t.owedBy.name.trim(); (people[k] = people[k] || { name: k, v: 0, n: 0 }); people[k].v += oweLeft(t); people[k].n++; });
   return { unpaid, devo: sum(unpaid, t => (t.parts || []).length ? leftToPay(t) : t.amount), owed, meDevem: sum(owed, oweLeft), people: Object.values(people).sort((a, b) => b.v - a.v) };
 }
