@@ -854,7 +854,7 @@ function planView() {
     <section class="card">
       <div class="card-h"><span class="t">${ic('repeat')} Rendas e contas fixas</span></div>
       <div class="duo"><button class="btn ghost" data-a="newIncome">${ic('plus')} Renda</button><button class="btn ghost" data-a="newFixed">${ic('plus')} Conta fixa</button></div>
-      <div class="kpis" style="margin-bottom:6px"><div class="kpi" style="background:var(--card2)"><div class="k">Entra por mês</div><div class="v pos">${fmt(N.fixIn)}</div></div><div class="kpi" style="background:var(--card2)"><div class="k">Sai por mês</div><div class="v">${fmt(N.fixOut)}</div></div></div>
+      <div class="kpis two"><div class="kpi"><div class="k">Entra por mês</div><div class="v pos">${fmt(sum(fIn))}</div></div><div class="kpi"><div class="k">Sai por mês</div><div class="v">${fmt(sum(fOut))}</div></div></div>
       ${S.fixed.length ? [...fIn, ...fOut].map(fixRow).join('') : `<div class="empty"><b>Nada cadastrado</b>Comece pelas suas rendas. Contas fixas (aluguel, assinaturas) aparecem todo mês em Contas a pagar.</div>`}
     </section>
     <section class="card">
