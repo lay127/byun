@@ -1509,7 +1509,7 @@ const INITIAL_PASS = 'Fin#2026';
 function authView() {
   const m = ui.auth || 'login';
   const msg = ui.authMsg ? `<div class="pill auth-msg ${ui.authOk ? 'ok' : 'bad'}" style="display:flex;margin:12px 0 0;padding:10px 14px;border-radius:14px;line-height:1.4">${esc(ui.authMsg)}</div>` : '';
-  if (m === 'loading') return `<div class="ob"><div style="width:110px;margin:0 auto">${byunSVG('sleepy')}</div><p class="lead" style="margin-top:14px">Acordando o ${esc(curPet().name)}...</p></div>`;
+  if (m === 'loading') return `<div class="ob wake"><div style="width:110px;margin:0 auto">${byunSVG('sleepy')}</div><p class="lead" style="margin-top:14px">Acordando o ${esc(curPet().name)}...</p></div>`;
   if (m === 'newpass') {
     const forced = ui.forced;
     return `<div class="ob"><div style="width:96px;margin:0 auto">${byunSVG(forced ? 'happy' : 'normal')}</div>

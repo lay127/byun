@@ -570,3 +570,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
   .side>.card{padding-bottom:4px}
 }
 @media (min-width:1100px){ .side .sp-b:not(:has(*)){display:none} .side>.card{padding-bottom:14px!important} }
+/* tela "Acordando o Byun" sempre no meio da tela */
+.ob.wake{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;margin:0;max-width:none;padding:24px;z-index:5}
+/* telas sem a barra lateral (entrar, trocar senha, primeiro acesso): centralizadas */
+@media (min-width:1100px){ body:not(:has(.nav)) #app{margin:0 auto;max-width:480px;padding-left:20px;padding-right:20px} }
