@@ -606,17 +606,29 @@ function syncFixedFuture(f, removed) {
   });
 }
 function billsList(N) {
-  // fixos no cartão já estão dentro da fatura, então não aparecem duas vezes
-  const items = N.fixOutList.filter(f => !isCredit(acc(f.accId))).map(f => { const t = fixedTx(f, N.m); return { id: f.id, tx: t?.id, open: t ? `editTx|${t.id}` : `editFixed|${f.id}`, paid: t ? isPaid(t) : N.paid.includes(f.id), name: f.name, amount: t ? t.amount : f.amount, day: noDate(f) ? 99 : (+f.day || 1), icon: cat(f.catId)?.icon || '📌', sub: acc(f.accId)?.name || 'fixo' }; });
+  const items = [];
+  // 1) todas as contas fixas do mês (as do cartão aparecem também, mas o valor delas já está na fatura)
+  N.fixOutList.forEach(f => {
+    const t = fixedTx(f, N.m), a = acc(f.accId), cr = isCredit(a);
+    items.push({ id: f.id, tx: t?.id, open: t ? `editTx|${t.id}` : `editFixed|${f.id}`, paid: t ? isPaid(t) : N.paid.includes(f.id), name: f.name,
+      amount: t ? ((t.parts || []).length ? leftToPay(t) : t.amount) : f.amount, day: noDate(f) ? 99 : (+f.day || 1), icon: cat(f.catId)?.icon || '📌',
+      sub: cr ? `${a.name} · já na fatura` : (a?.name || 'fixo'), inFatura: cr });
+  });
+  // 2) lançamentos avulsos marcados como "a pagar" (débito/pix com pagamento pendente ou em partes)
+  S.tx.filter(t => t.type === 'gasto' && !t.fixedId && t.date.slice(0, 7) === N.m && !isCredit(acc(t.accId)) && (typeof t.paid === 'boolean' || (t.parts || []).length)).forEach(t => {
+    items.push({ id: t.id, tx: t.id, open: `editTx|${t.id}`, paid: isPaid(t), name: t.note || cat(t.catId)?.name || 'Gasto', amount: (t.parts || []).length ? leftToPay(t) : t.amount,
+      day: +t.date.slice(8), icon: cat(t.catId)?.icon || '📦', sub: `${acc(t.accId)?.name || ''} · lançamento`.replace(/^ · /, '') });
+  });
+  // 3) faturas dos cartões que vencem neste mês
   S.accounts.filter(isCredit).forEach(a => {
     const k = invoiceDueIn(a, N.m), v = invoice(a, k);
     if (v > 0) items.push({ id: `card:${a.id}@${k}`, open: `invoice|${a.id}|${k}`, paid: (S.fixedPaid[k] || []).includes('card:' + a.id), name: `Fatura ${a.name}`, amount: v, day: Math.min(+a.due || 10, dim(N.m)), icon: '💳', sub: 'compras e fixos do cartão' });
   });
-  return items.sort((a, b) => a.day - b.day);
+  return items.sort((a, b) => a.day - b.day || (a.inFatura ? 1 : 0) - (b.inFatura ? 1 : 0));
 }
 function billsCard(N) {
   const items = billsList(N);
-  const pend = items.filter(x => !x.paid);
+  const pend = items.filter(x => !x.paid && !x.inFatura);   // fixos do cartão não somam de novo: já estão na fatura
   const days = [...new Set(items.map(x => x.day).filter(d => d !== 99))];
   if (ui.payDay && !days.includes(ui.payDay)) ui.payDay = null;
   const shown = ui.payDay ? items.filter(x => x.day === ui.payDay) : items;
@@ -624,9 +636,9 @@ function billsCard(N) {
   return `<section class="card">
     <div class="card-h"><span class="t">${ic('calendar')} Contas a pagar${next ? ` <span class="muted" style="font-weight:600;font-size:12px">· dia ${pad(next.day)}</span>` : ''}</span><button class="link" data-a="newFixed">Nova ${ic('plus')}</button></div>
     ${items.length ? `<div class="saldo-big" style="font-size:28px">${money(sum(pend))}</div>
-    <div class="sub" style="margin-bottom:12px">${items.length - pend.length} de ${items.length} pagas</div>
+    <div class="sub" style="margin-bottom:12px">${items.filter(x => x.paid).length} de ${items.length} pagas${items.some(x => x.inFatura) ? ' · fixos do cartão já contam na fatura' : ''}</div>
     <div class="days">${days.map(d => { const its = items.filter(x => x.day === d); const done = its.every(x => x.paid); return `<button class="${ui.payDay === d ? 'on' : ''} ${done ? 'done' : ''}" data-a="payDay" data-v="${d}">${pad(d)}<em>${'•'.repeat(Math.min(5, its.length))}</em></button>`; }).join('')}</div>
-    ${shown.map(x => { const p = x.paid; const [oa, ...ov] = (x.open || '').split('|'); return `<div class="row tap ${p ? 'paid' : ''}" data-a="${oa}" data-v="${ov.join('|')}"><button class="check ${p ? 'on' : ''}" data-a="${x.tx ? 'paidTx' : 'pay'}" data-v="${x.tx || x.id}" aria-label="Marcar como paga">${ic('check')}</button><div class="l"><div class="n">${esc(x.name)}</div><div class="d">${x.day === 99 ? 'sem data' : 'dia ' + pad(x.day)} · ${esc(x.sub)}</div></div><div class="v">${fmt(x.amount)}</div></div>`; }).join('')}`
+    ${shown.map(x => { const p = x.paid; const [oa, ...ov] = (x.open || '').split('|'); return `<div class="row tap ${p ? 'paid' : ''} ${x.inFatura ? 'in-fat' : ''}" data-a="${oa}" data-v="${ov.join('|')}"><button class="check ${p ? 'on' : ''}" data-a="${x.tx ? 'paidTx' : 'pay'}" data-v="${x.tx || x.id}" aria-label="Marcar como paga">${ic('check')}</button><div class="l"><div class="n">${esc(x.name)}</div><div class="d">${x.day === 99 ? 'sem data' : 'dia ' + pad(x.day)} · ${esc(x.sub)}</div></div><div class="v">${fmt(x.amount)}</div></div>`; }).join('')}`
       : `<div class="empty"><b>Nenhuma conta cadastrada</b>Aluguel, assinaturas e faturas aparecem aqui com o dia de vencimento.</div>`}
   </section>`;
 }

@@ -423,3 +423,5 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .eye-btn:active{background:var(--card2)}
 .label .eye-btn{width:24px;height:24px;margin-left:2px}
 .label .eye-btn svg{width:15px;height:15px}
+
+.row.in-fat .v{color:var(--muted);font-weight:600}
