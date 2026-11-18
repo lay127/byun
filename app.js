@@ -194,7 +194,7 @@ async function enter(u) {
   try { const r = await sb.rpc('is_admin'); isAdmin = !!r.data; } catch (e) { isAdmin = false; }
   if (prof.must_change) { ui.auth = 'newpass'; ui.forced = true; render(); return; }
   if (isAdmin) { loadUsers(); render(); return; }
-  S = load(); sortedOnce = false; if (!S.name && prof.display_name) S.name = prof.display_name;
+  S = load(); sortedOnce = false; if (prof.display_name) S.name = prof.display_name;   // um nome só: o da conta
   render(); await pull();
 }
 async function boot() {
@@ -1042,7 +1042,7 @@ function settingsView() {
     <section class="card pet-card" data-a="editPet"><div class="pet-mini ${petCls()}">${byunSVG('happy')}</div><div style="flex:1"><div style="font-weight:800;font-size:16px">${esc(curPet().name || 'Byun')}</div><div class="sub">${esc((SPECIES.find(s => s[0] === curPet().species) || ['', 'Gato'])[1])} · toque pra personalizar</div></div>${ic('right')}</section>
     <div class="section-t">Você e o Byun</div>
     <section class="card">
-      <label class="fld" style="margin-top:0"><span>Seu nome</span><input class="inp" data-setv="name" value="${esc(S.name)}" placeholder="Como o Byun te chama"></label>
+      ${CLOUD && user ? '' : `<label class="fld" style="margin-top:0"><span>Seu nome</span><input class="inp" data-setv="name" value="${esc(S.name)}" placeholder="Como o Byun te chama"></label>`}
       <div class="flabel">Tema</div>
       <div class="seg"><button class="${S.theme === 'light' ? 'on' : ''}" data-a="setTheme" data-v="light">Claro</button><button class="${S.theme === 'dark' ? 'on' : ''}" data-a="setTheme" data-v="dark">Escuro</button></div>
       <div class="flabel">Jeito do ${esc(curPet().name)}</div>
