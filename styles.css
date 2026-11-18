@@ -497,3 +497,21 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
   .saldo-split .legend{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 @media (min-width:1100px){ .nav .brand i{width:46px} }
+
+/* saldo embaixo do Byun, painel parado na tela */
+.home-grid .side>.card{margin-top:12px}
+@media (min-width:760px){ .home-grid .side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start} .home-grid .side>.card{margin:0} }
+@media (min-width:1100px){
+  .home-grid .side{display:flex;flex-direction:column;gap:16px;align-items:stretch;position:sticky;top:16px;max-height:calc(100dvh - 32px);overflow-y:auto;scrollbar-width:none;overscroll-behavior:contain}
+  .home-grid .side::-webkit-scrollbar{display:none}
+  .side .saldo-split{display:block}
+  .side .saldo-split .sp-b .flabel{margin-top:16px!important}
+  .side .saldo-split .legend{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .side .hero-card{padding:16px 16px 0}
+  .side .hero-card .qa{margin:12px 0 10px}
+}
+@media (min-width:1100px) and (max-height:980px){
+  .side .hero-card .gauge{transform:scale(.86);transform-origin:50% 0;margin-bottom:-30px}
+  .side .hero-card .bubble{margin:0 0 6px}
+}
+@media (min-width:760px){ .side .saldo-split{display:block} .side .saldo-split .sp-b .flabel{margin-top:16px!important} }

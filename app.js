@@ -493,9 +493,9 @@ function topbar(title) {
     <div class="tr"><button class="icon-btn flat" data-a="hide" aria-label="${HIDE ? 'Mostrar valores' : 'Esconder valores'}">${ic(HIDE ? 'eyeOff' : 'eye')}</button><button class="icon-btn" data-a="go" data-v="settings" aria-label="Ajustes">${ic('gear')}</button></div></div>`;
 }
 function nav() {
-  const on = v => ui.view === v || (v === 'home' && (ui.view === 'cardsFull' || ui.view === 'boxesFull'));
+  const on = v => ui.view === v;
   const b = (v, i, l, x = '') => `<button class="${on(v) ? 'on' : ''} ${x}" data-a="go" data-v="${v}" aria-label="${l}">${ic(i)}<span>${l}</span></button>`;
-  return `<nav class="nav"><div class="brand"><i class="${petCls()}">${byunSVG('happy')}</i><b>Byun</b></div>${b('home', 'home', 'Início')}${b('tx', 'list', 'Transações')}<button class="plus" data-a="add" data-v="gasto" aria-label="Novo lançamento">${ic('plus')}<span>Novo lançamento</span></button>${b('charts', 'pie', 'Análises')}${b('plan', 'sliders', 'Planejar')}${b('settings', 'gear', 'Ajustes', 'only-desk')}</nav>`;
+  return `<nav class="nav"><div class="brand"><i class="${petCls()}">${byunSVG('happy')}</i><b>Byun</b></div>${b('home', 'home', 'Início')}${b('tx', 'list', 'Transações')}<button class="plus" data-a="add" data-v="gasto" aria-label="Novo lançamento">${ic('plus')}<span>Novo lançamento</span></button>${b('cardsFull', 'card', 'Cartões', 'only-desk')}${b('boxesFull', 'piggy', 'Cofrinho', 'only-desk')}${b('charts', 'pie', 'Análises')}${b('plan', 'sliders', 'Planejar')}${b('settings', 'gear', 'Ajustes', 'only-desk')}</nav>`;
 }
 
 let sortedOnce = false;
@@ -552,9 +552,8 @@ function homeView() {
   </div>`);
 
   return topbar() + `<div class="home-grid">
-    <div class="side"><div class="hero-card">${hero}</div></div>
+    <div class="side"><div class="hero-card">${hero}</div>${withHide('saldo', () => saldoCard(N))}</div>
     <div class="main">
-      <div class="o1">${withHide('saldo', () => saldoCard(N))}</div>
       <div class="cols">
         <div class="col">${`<div class="o3">${withHide('cartoes', () => cardsCard())}</div><div class="o4">${withHide('contas', () => billsCard(N))}</div>`}</div>
         <div class="col">${`<div class="o2">${withHide('cofrinho', () => boxCard(N))}</div><div class="o5">${withHide('recentes', () => recentCard(N))}</div><div class="o6">${withHide('extras', () => extrasCard(N))}</div>`}</div>
