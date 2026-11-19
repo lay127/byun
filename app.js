@@ -295,6 +295,26 @@ const cat = id => S.categories.find(c => c.id === id);
 const acc = id => S.accounts.find(a => a.id === id);
 const catColor = c => c ? `var(--s${(c.color % 8) + 1})` : 'var(--muted)';
 const isCredit = a => a && a.type === 'credito';
+const isBenef = a => a && a.type === 'beneficio';   // vale-refeição / alimentação: saldo próprio, quando acaba acabou
+const onBenef = t => isBenef(acc(t.accId));
+const cardLike = () => S.accounts.filter(a => isCredit(a) || isBenef(a));
+// recargas automáticas do vale entre duas datas (exclusive from, inclusive to)
+function benefRecharges(a, from, to) {
+  if (!(+a.recharge > 0) || !a.rDay) return [];
+  const out = []; let k = from.slice(0, 7);
+  for (let i = 0; i < 240 && k <= to.slice(0, 7); i++, k = addMonths(k, 1)) { const d = `${k}-${pad(Math.min(+a.rDay, dim(k)))}`; if (d > from && d <= to) out.push(d); }
+  return out;
+}
+function benefBal(a) {
+  const since = a.balAt || 0, from = a.balDate || todayISO(), today = todayISO();
+  const mine = S.tx.filter(t => t.accId === a.id && (t.at || 0) > since && t.date <= today);
+  return r2((+a.balIni || 0) + benefRecharges(a, from, today).length * (+a.recharge || 0) + sum(mine.filter(t => t.type === 'receita')) - sum(mine.filter(t => t.type === 'gasto')));
+}
+function nextRecharge(a) {
+  if (!(+a.recharge > 0) || !a.rDay) return null;
+  const t = todayISO(); let k = t.slice(0, 7); let d = `${k}-${pad(Math.min(+a.rDay, dim(k)))}`;
+  if (d <= t) { k = addMonths(k, 1); d = `${k}-${pad(Math.min(+a.rDay, dim(k)))}`; } return d;
+}
 
 /* ---------- dias úteis (feriados nacionais) ---------- */
 const isoD = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -364,7 +384,7 @@ function cardFree(a) {
 
 function info(m = ui.month) {
   const tx = S.tx.filter(t => t.date.slice(0, 7) === m);   // transações seguem a data da compra; só a fatura segue o ciclo do cartão
-  const gastos = tx.filter(t => t.type === 'gasto' && !t.fixedId), receitas = tx.filter(t => t.type === 'receita');   // contas fixas lançadas não entram no dia a dia
+  const gastos = tx.filter(t => t.type === 'gasto' && !t.fixedId && !onBenef(t)), receitas = tx.filter(t => t.type === 'receita' && !onBenef(t));   // o vale tem saldo próprio: fica fora do Pode gastar   // contas fixas lançadas não entram no dia a dia
   const gasto = sum(gastos), receita = sum(receitas);
   const limit = sum(S.categories, c => c.limit);
   const fixIn = sum(S.fixed.filter(f => f.kind === 'entra' && (!f.since || f.since <= m)));
@@ -742,32 +762,61 @@ function billsCard(N) {
   </section>`;
 }
 
+function benefCC(c, i, sel) {
+  const nr = nextRecharge(c);
+  return `<div class="ccard benef ${sel || ''}" data-a="${sel !== undefined ? 'fullCard' : 'invoice'}" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
+    <div class="top-r"><span>${esc(c.name)}</span><span class="st">Vale</span></div><div class="vale-ic">🍽️</div>
+    <div class="bot"><div>${nr ? 'Recarga' : 'Saldo'}<b>${nr ? nr.slice(8) + '/' + nr.slice(5, 7) : fmt(benefBal(c))}</b></div><div style="text-align:right">Saldo<b>${fmt(benefBal(c))}</b></div></div></div>`;
+}
+function benefBody(a, full) {
+  const bal = benefBal(a), nr = nextRecharge(a), m = ui.month;
+  const list = S.tx.filter(t => t.accId === a.id && t.date.slice(0, 7) === m).sort((x, y) => y.date.localeCompare(x.date) || (y.at || 0) - (x.at || 0));
+  const spent = sum(list.filter(t => t.type === 'gasto'));
+  const base = Math.max(+a.recharge || 0, bal + spent);
+  return `<div class="sub" style="margin-top:6px">Saldo disponível${nr ? ` · próxima recarga ${nr.slice(8)}/${nr.slice(5, 7)} (${fmt(+a.recharge)})` : ''}</div>
+    <div class="saldo-big ${bal <= 0 ? 'neg' : ''}">${money(bal)}</div>
+    ${base > 0 ? `<div class="prog" style="height:10px;margin-top:10px"><i class="${bal <= 0 ? 'over' : ''}" style="width:${Math.min(100, Math.max(0, bal) / base * 100)}%"></i></div><div class="sub" style="display:flex;justify-content:space-between;margin-top:6px"><span>gastou ${fmt(spent)} em ${monthName(m).toLowerCase()}</span><span>${bal <= 0 ? 'acabou o saldo' : 'sobra ' + fmt(bal)}</span></div>` : ''}
+    <div class="flabel">${list.length} ${list.length === 1 ? 'lançamento' : 'lançamentos'} em ${monthName(m).toLowerCase()}</div>
+    ${list.length ? `<div class="card" style="padding:4px 16px;margin:0">${list.map(txRow).join('')}</div>` : '<div class="empty">Nada nesse mês.</div>'}
+    <button class="btn ghost" data-a="editAcc" data-v="${a.id}">Editar vale</button>`;
+}
 function cardsCard() {
-  const cards = S.accounts.filter(isCredit);
+  const cards = cardLike();
   if (!cards.length) return `<section class="card"><div class="card-h"><span class="t">${ic('card')} Cartões</span></div><div class="empty"><b>Nenhum cartão de crédito</b>Cadastre em Ajustes pra acompanhar faturas e limite.</div><button class="btn ghost" data-a="newAcc" data-v="credito">Adicionar cartão</button></section>`;
   ui.card = Math.min(ui.card, cards.length - 1);
   const a = cards[ui.card];
+  const steps = cards.length > 1 ? `<span class="cstep"><button data-a="cardStep" data-v="-1" aria-label="Cartão anterior" ${ui.card === 0 ? 'disabled' : ''}>${ic('left')}</button><span class="muted">${ui.card + 1} de ${cards.length}</span><button data-a="cardStep" data-v="1" aria-label="Próximo cartão" ${ui.card === cards.length - 1 ? 'disabled' : ''}>${ic('right')}</button></span>` : '';
+  const scroll = `<div class="cards-scroll" id="cardScroll">${cards.map((c, i) => isBenef(c) ? benefCC(c, i) : `<div class="ccard" data-a="invoice" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
+        <div class="top-r"><span>${esc(c.name)}</span><span class="st">${c.closing && +todayISO().slice(8) > c.closing ? 'Fechada' : 'Aberta'}</span></div>
+        <div class="chip-i"></div>
+        <div class="bot"><div>Vence<b>${dueDate(c, cardOpenMonth(c))}</b></div><div style="text-align:right">Limite livre<b>${fmt(cardFree(c))}</b></div></div>
+      </div>`).join('')}<div class="ccard add" data-a="newAcc" data-v="credito">+ Novo cartão</div></div>`;
+  if (isBenef(a)) {
+    const bal = benefBal(a), nr = nextRecharge(a);
+    const spent = sum(S.tx.filter(t => t.accId === a.id && t.type === 'gasto' && t.date.slice(0, 7) === ui.month));
+    return `<section class="card">
+    <div class="card-h"><span class="t">${ic('card')} Cartões</span>${steps}<button class="expand" data-a="go" data-v="cardsFull" aria-label="Abrir em tela cheia">${ic('expand')}</button></div>
+    <div class="sub">Saldo do ${esc(a.name)}</div>
+    <div class="saldo-big ${bal <= 0 ? 'neg' : ''}" style="font-size:28px;margin-bottom:12px">${money(bal)}</div>
+    ${scroll}
+    <div class="invoices" style="margin-top:14px"><div class="inv">Gastou em ${MES3[+ui.month.slice(5) - 1]}<b>${fmt(spent)}</b></div><div class="inv">${nr ? 'Recarga ' + nr.slice(8) + '/' + nr.slice(5, 7) : 'Recarga'}<b>${+a.recharge > 0 ? fmt(+a.recharge) : 'manual'}</b></div><div class="inv ${bal <= 0 ? 'over' : ''}">${bal <= 0 ? 'Acabou' : 'Sobra'}<b>${fmt(Math.max(0, bal))}</b></div></div>
+  </section>`;
+  }
   const open = cardOpenMonth(a);
   const nexts = [0, 1, 2].map(i => addMonths(open, i));
   const fechada = a.closing && +todayISO().slice(8) > a.closing;
   return `<section class="card">
-    <div class="card-h"><span class="t">${ic('card')} Cartões</span>${cards.length > 1 ? `<span class="cstep"><button data-a="cardStep" data-v="-1" aria-label="Cartão anterior" ${ui.card === 0 ? 'disabled' : ''}>${ic('left')}</button><span class="muted">${ui.card + 1} de ${cards.length}</span><button data-a="cardStep" data-v="1" aria-label="Próximo cartão" ${ui.card === cards.length - 1 ? 'disabled' : ''}>${ic('right')}</button></span>` : ''}<button class="expand" data-a="go" data-v="cardsFull" aria-label="Abrir em tela cheia">${ic('expand')}</button></div>
+    <div class="card-h"><span class="t">${ic('card')} Cartões</span>${steps}<button class="expand" data-a="go" data-v="cardsFull" aria-label="Abrir em tela cheia">${ic('expand')}</button></div>
     <div class="sub">Fatura de ${monthName(open).toLowerCase()}</div>
     <div class="saldo-big" style="font-size:28px;margin-bottom:12px">${money(invoice(a, open))}</div>
-    <div class="cards-scroll" id="cardScroll">
-      ${cards.map((c, i) => `<div class="ccard" data-a="invoice" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
-        <div class="top-r"><span>${esc(c.name)}</span><span class="st">${i === ui.card && fechada ? 'Fechada' : 'Aberta'}</span></div>
-        <div class="chip-i"></div>
-        <div class="bot"><div>Vence<b>${dueDate(c, cardOpenMonth(c))}</b></div><div style="text-align:right">Limite livre<b>${fmt(cardFree(c))}</b></div></div>
-      </div>`).join('')}
-      <div class="ccard add" data-a="newAcc" data-v="credito">+ Novo cartão</div>
-    </div>
+    ${scroll}
     <div class="flabel" style="margin-top:14px">PRÓXIMAS FATURAS</div>
     <div class="invoices">${nexts.map((m, i) => `<div class="inv ${i === 0 ? 'on' : ''}" data-a="invoice" data-v="${a.id}|${m}">${MES3[+m.slice(5) - 1]}${m.slice(0, 4) !== open.slice(0, 4) ? ' ' + m.slice(2, 4) : ''}<b>${fmt(invoice(a, m))}</b></div>`).join('')}</div>
   </section>`;
 }
 function invoiceSheet(accId, m) {
   const a = acc(accId); if (!a) return;
+  if (isBenef(a)) { openSheet(sheetHead(esc(a.name)) + benefBody(a, false)); return; }
   openSheet(sheetHead(esc(a.name)) + invoiceBody(a, m || cardOpenMonth(a), false));
 }
 function invoiceBody(a, m, full) {
@@ -791,16 +840,16 @@ function invoiceBody(a, m, full) {
 }
 /* tela cheia: cartões */
 function cardsFullView() {
-  const cards = S.accounts.filter(isCredit);
+  const cards = cardLike();
   if (!cards.length) return topbar('Cartões') + `<div class="empty" style="margin-top:40px"><b>Nenhum cartão de crédito</b>Cadastre um pra acompanhar faturas e limite.</div><button class="btn" data-a="newAcc" data-v="credito">Adicionar cartão</button>`;
   const a = cards.find(c => c.id === ui.fullCard) || cards[0]; ui.fullCard = a.id;
-  const m = ui.fullInvM && ui.fullInvAcc === a.id ? ui.fullInvM : cardOpenMonth(a);
+  const m = isBenef(a) ? ui.month : ui.fullInvM && ui.fullInvAcc === a.id ? ui.fullInvM : cardOpenMonth(a);
   return topbar('Cartões') + `<div class="narrow full-cards">
-    <div class="cards-grid">${cards.map(c => `<div class="ccard ${c.id === a.id ? 'sel' : 'dim'}" data-a="fullCard" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
+    <div class="cards-grid">${cards.map(c => isBenef(c) ? benefCC(c, 0, c.id === a.id ? 'sel' : 'dim') : `<div class="ccard ${c.id === a.id ? 'sel' : 'dim'}" data-a="fullCard" data-v="${c.id}" style="background:linear-gradient(140deg,${c.color},${shade(c.color)})">
       <div class="top-r"><span>${esc(c.name)}</span><span class="st">${fmt(invoice(c, cardOpenMonth(c)))}</span></div><div class="chip-i"></div>
       <div class="bot"><div>Vence<b>${dueDate(c, cardOpenMonth(c))}</b></div><div style="text-align:right">Limite livre<b>${fmt(cardFree(c))}</b></div></div></div>`).join('')}
       <div class="ccard add" data-a="newAcc" data-v="credito">+ Novo cartão</div></div>
-    <section class="card" style="margin-top:14px"><div class="card-h"><span class="t">${ic('card')} ${esc(a.name)}</span></div>${invoiceBody(a, m, true)}</section></div>`;
+    <section class="card" style="margin-top:14px"><div class="card-h"><span class="t">${ic('card')} ${esc(a.name)}</span></div>${isBenef(a) ? benefBody(a, true) : invoiceBody(a, m, true)}</section></div>`;
 }
 function shade(hex) {
   const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
@@ -932,7 +981,7 @@ function isPaid(t) {
   if (typeof t.paid === 'boolean') return t.paid;
   if ((t.parts || []).length) return false;
   const a = acc(t.accId);
-  if (!isCredit(a)) return true;                                      // débito e pix já saem pagos
+  if (!isCredit(a)) return true;                                      // débito, pix e vale já saem pagos
   return (S.fixedPaid[invMonth(t, a)] || []).includes('card:' + a.id); // cartão: pago quando a fatura é marcada
 }
 const oweTotal = t => +t.owedBy?.amount || t.amount;
@@ -1300,6 +1349,8 @@ function renderAdd() {
     const c = cat(d.catId);
     if (c) { const used = (N.byCat.find(x => x.c.id === c.id)?.v || 0) - (editing && editing.catId === c.id ? editing.amount : 0); const rest = c.limit - used - v; sub = c.limit > 0 ? (rest >= 0 ? `${esc(c.name)}: sobram <b>${fmt(rest)}</b> de ${fmt0(c.limit)}` : `${esc(c.name)}: passa <b class="neg">${fmt(-rest)}</b> do limite de ${fmt0(c.limit)}`) : `${esc(c.name)}: sem limite definido`; }
     else sub = `Pode gastar no mês: <b>${fmt(N.pode + (editing ? editing.amount : 0) - v)}</b>`;
+    const va = acc(d.accId);
+    if (isBenef(va)) { const av = r2(benefBal(va) + (editing && editing.accId === va.id && (editing.at || 0) > (va.balAt || 0) ? editing.amount : 0)); sub = av - v >= 0 ? `Saldo do ${esc(va.name)}: sobram <b>${fmt(av - v)}</b>` : `Saldo do ${esc(va.name)}: <b class="neg">não dá</b>, só tem ${fmt(av)}`; }
   } else sub = 'Dinheiro que entrou na conta';
   const amt = brl.format(v || 0).replace(/\u00a0/g, ' ');   // o valor digitado aparece mesmo com os valores escondidos
   const tabs = `<div class="seg"><button class="${d.type === 'gasto' ? 'on' : ''}" data-a="dType" data-v="gasto">Gasto</button><button class="${d.type === 'receita' ? 'on' : ''}" data-a="dType" data-v="receita">Receita</button></div>`;
@@ -1317,7 +1368,7 @@ function renderAdd() {
   }
   const a = acc(d.accId);
   $('#add').innerHTML = head + tabs + `<div class="amount" data-a="dBack" style="cursor:pointer">${amt}<span class="edit-amt">${ic('pencil')}</span></div><div class="amount-sub">${sub}</div>${cats}
-    <div class="flabel">Conta</div><div class="chips">${S.accounts.map(x => `<button class="chip ${d.accId === x.id ? 'on' : ''}" data-a="dAcc" data-v="${x.id}"><span class="dot" style="background:${x.color}"></span>${esc(x.name)}</button>`).join('')}</div>
+    <div class="flabel">Conta</div><div class="chips">${S.accounts.map(x => `<button class="chip ${d.accId === x.id ? 'on' : ''}" data-a="dAcc" data-v="${x.id}"><span class="dot" style="background:${x.color}"></span>${esc(x.name)}${isBenef(x) ? ` <small class="muted">${fmt(benefBal(x))}</small>` : ''}</button>`).join('')}</div>
     <div class="details ${d.more ? 'open' : ''}"><button data-a="dMore">Data, nota e mais ${ic('down')}</button>
       ${d.more ? `<label class="fld"><span>Nota</span><input id="dNote" value="${esc(d.note)}" placeholder="Ex.: Uber pro metrô" maxlength="60"></label>
       <label class="fld"><span>Data</span><input id="dDate" type="date" value="${d.date}"></label>
@@ -1361,6 +1412,12 @@ function saveDraft() {
   };
   const credit = d.type === 'gasto' && isCredit(acc(d.accId));
   if (!credit) d.parcelas = 1;
+  const va = acc(d.accId);
+  if (d.type === 'gasto' && isBenef(va)) {
+    const old = d.editId ? S.tx.find(x => x.id === d.editId) : null;
+    const avail = r2(benefBal(va) + (old && old.accId === va.id && old.type === 'gasto' && (old.at || 0) > (va.balAt || 0) ? old.amount : 0));
+    if (amount > avail) { toast(avail > 0 ? `Saldo do ${va.name} não dá: só tem ${fmt(avail)}` : `O saldo do ${va.name} acabou`); return; }
+  }
   if (d.editId && !d.groupId && d.parcelas <= 1) {
     const t = S.tx.find(x => x.id === d.editId);
     extra(Object.assign(t, { type: d.type, amount, catId: d.type === 'gasto' ? d.catId : null, accId: d.accId, note: d.note.trim(), date: d.date }));
@@ -1530,14 +1587,17 @@ function catForm(c) {
 }
 function accForm(a, type = 'conta') {
   const other = S.accounts.find(x => x.id === S.defaultAcc && (!a || x.id !== a.id));
-  const nameFor = (bank, tp) => { const n = bankOf(bank)[1].replace(' Bank', '').replace('Outro banco', ''); return tp === 'credito' ? `Cartão ${n}`.trim() : n; };
-  const start = a ? { ...a, isDefault: S.defaultAcc === a.id } : { bank: 'nubank', type, color: bankOf('nubank')[2], name: nameFor('nubank', type), closing: 3, due: 10 };
+  const nameFor = (bank, tp) => { const n = bankOf(bank)[1].replace(' Bank', '').replace('Outro banco', ''); return tp === 'credito' ? `Cartão ${n}`.trim() : tp === 'beneficio' ? `Vale ${n}`.trim() : n; };
+  const start = a ? { ...a, isDefault: S.defaultAcc === a.id, ...(isBenef(a) ? { balIni: benefBal(a) } : {}) } : { bank: 'nubank', type, color: bankOf('nubank')[2], name: nameFor('nubank', type), closing: 3, due: 10 };
   let autoName = !a;
   openForm({
     title: a ? 'Editar conta' : 'Nova conta ou cartão', values: start,
     fields: [
       { key: 'bank', label: 'Banco', type: 'select', banks: 'all' },
-      { key: 'type', label: 'Tipo', type: 'radios', options: [['conta', 'Conta / débito / pix'], ['credito', 'Cartão de crédito']], def: type },
+      { key: 'type', label: 'Tipo', type: 'radios', options: [['conta', 'Conta / débito / pix'], ['credito', 'Cartão de crédito'], ['beneficio', 'Vale (VR/VA)']], def: type },
+      { key: 'balIni', label: 'Saldo de hoje no vale', type: 'money', reqIf: f => f.querySelector('[name=type]:checked')?.value === 'beneficio', hint: 'Olhe no app do vale. Daqui pra frente o Byun desconta cada gasto lançado nele.' },
+      { key: 'recharge', label: 'Recarga todo mês (opcional)', type: 'money', hint: 'Quanto a empresa coloca por mês. Deixe vazio se varia.' },
+      { key: 'rDay', label: 'Dia da recarga (1 a 31)', type: 'number', hint: 'O saldo sobe sozinho nesse dia.' },
       { key: 'name', label: 'Nome', req: true, max: 30, ph: 'Ex.: Cartão Santander' },
       { key: 'color', label: 'Cor', type: 'colors', options: [...new Set(BANKS.map(b => b[2]))].slice(0, 9) },
       { key: 'limit', label: 'Limite do cartão', type: 'money' },
@@ -1545,10 +1605,12 @@ function accForm(a, type = 'conta') {
       { key: 'due', label: 'Dia do vencimento (1 a 31)', type: 'number', req: true, reqIf: f => f.querySelector('[name=type]:checked')?.value === 'credito' },
       { key: 'isDefault', label: 'Conta padrão nos lançamentos', type: 'toggle', disabled: !!other, hint: other ? `A padrão hoje é ${esc(other.name)}. Pra trocar, abra ela e desligue a opção lá.` : 'Já vem selecionada quando você lança um gasto.' }
     ],
-    onOpen: form => { const t = () => { const cr = form.querySelector('[name=type]:checked')?.value === 'credito'; ['limit', 'closing', 'due'].forEach(k => form.querySelector(`[data-fk=${k}]`).style.display = cr ? '' : 'none'); }; t(); form._t = t; },
+    onOpen: form => { const t = () => { const tp = form.querySelector('[name=type]:checked')?.value, cr = tp === 'credito', vb = tp === 'beneficio'; ['limit', 'closing', 'due'].forEach(k => form.querySelector(`[data-fk=${k}]`).style.display = cr ? '' : 'none'); ['balIni', 'recharge', 'rDay'].forEach(k => form.querySelector(`[data-fk=${k}]`).style.display = vb ? '' : 'none'); }; t(); form._t = t; },
     onInput: (form, k) => { if (k === 'name') autoName = false; },
     onChange: (form, k) => {
-      const bank = form.querySelector('[name=bank]').value, tp = form.querySelector('[name=type]:checked')?.value;
+      const bank = form.querySelector('[name=bank]').value; let tp = form.querySelector('[name=type]:checked')?.value;
+      const VALES = ['vr', 'alelo', 'pluxee', 'ticket', 'flash', 'caju', 'ifoodbeneficios', 'swile', 'vegas'];
+      if (k === 'bank' && VALES.includes(bank)) { const r = form.querySelector('[name=type][value=beneficio]'); if (r && !r.checked) { r.checked = true; form._t(); } tp = 'beneficio'; }
       if (k === 'type') form._t();
       if ((k === 'bank' || k === 'type') && autoName) form.querySelector('[name=name]').value = nameFor(bank, tp);
       if (k === 'bank') { const c = bankOf(bank)[2]; const sw = form.querySelector(`[name=color][value="${c}"]`); form.querySelectorAll('[name=color]').forEach(r => r.checked = false); if (sw) sw.checked = true; else form.querySelector('[name=color_custom]').value = c; }
@@ -1556,6 +1618,11 @@ function accForm(a, type = 'conta') {
     onSave: v => {
       const d = v.isDefault; delete v.isDefault;
       if (v.type === 'credito') { v.closing = Math.min(31, Math.max(1, v.closing || 1)); v.due = Math.min(31, Math.max(1, v.due || 10)); } else { v.closing = 0; v.due = 0; v.limit = 0; }
+      if (v.type === 'beneficio') {
+        v.rDay = v.rDay ? Math.min(31, Math.max(1, +v.rDay)) : 0;
+        // o saldo informado vale a partir de agora; só zera a conta se ele mudou
+        if (!a || !isBenef(a) || r2(+v.balIni || 0) !== r2(benefBal(a))) { v.balIni = +v.balIni || 0; v.balDate = todayISO(); v.balAt = Date.now(); } else { v.balIni = a.balIni; }
+      } else { delete v.balIni; delete v.recharge; delete v.rDay; }
       let t = a; if (a) Object.assign(a, v); else { t = { id: uid(), ...v }; S.accounts.push(t); }
       if (d) S.defaultAcc = t.id; else if (S.defaultAcc === t.id) S.defaultAcc = null;
       sortAccounts();
@@ -1708,7 +1775,7 @@ document.addEventListener('click', e => {
   switch (a) {
     case 'go': ui.view = v; window.scrollTo(0, 0); if (v === 'tx') { ui.accF = ui.catF = null; } render(); break;
     case 'month': ui.month = addMonths(ui.month, +v); ui.msgI = 0; render(); break;
-    case 'cardStep': { const n = S.accounts.filter(isCredit).length; ui.card = Math.max(0, Math.min(n - 1, ui.card + +v)); render(); const sc = $('#cardScroll'); if (sc && sc.firstElementChild) sc.scrollTo({ left: ui.card * (sc.firstElementChild.offsetWidth + 12), behavior: 'smooth' }); break; }
+    case 'cardStep': { const n = cardLike().length; ui.card = Math.max(0, Math.min(n - 1, ui.card + +v)); render(); const sc = $('#cardScroll'); if (sc && sc.firstElementChild) sc.scrollTo({ left: ui.card * (sc.firstElementChild.offsetWidth + 12), behavior: 'smooth' }); break; }
     case 'hideCard': { if (HIDE_CARDS.has(v)) HIDE_CARDS.delete(v); else HIDE_CARDS.add(v); try { localStorage.setItem('byun.hideCards', JSON.stringify([...HIDE_CARDS])); } catch (er) { } render(); break; }
     case 'hide': HIDE = !HIDE; try { localStorage.setItem('byun.hide', HIDE ? '1' : '0'); } catch (er) { } render(); break;
     case 'theme': S.theme = S.theme === 'dark' ? 'light' : 'dark'; save(); render(); break;
@@ -1864,7 +1931,7 @@ document.addEventListener('keydown', e => {
 /* deslizar o carrossel de cartões troca o cartão selecionado */
 document.addEventListener('scroll', e => {
   const sc = e.target; if (!sc || sc.id !== 'cardScroll') return;
-  clearTimeout(sc._t); sc._t = setTimeout(() => { const i = Math.round(sc.scrollLeft / ((sc.firstElementChild?.offsetWidth || 270) + 12)); const n = S.accounts.filter(isCredit).length; if (i !== ui.card && i < n) { ui.card = i; const left = sc.scrollLeft; render(); const ns = $('#cardScroll'); if (ns) ns.scrollLeft = left; } }, 140);
+  clearTimeout(sc._t); sc._t = setTimeout(() => { const i = Math.round(sc.scrollLeft / ((sc.firstElementChild?.offsetWidth || 270) + 12)); const n = cardLike().length; const _n = S.accounts.filter(isCredit).length; if (i !== ui.card && i < n) { ui.card = i; const left = sc.scrollLeft; render(); const ns = $('#cardScroll'); if (ns) ns.scrollLeft = left; } }, 140);
 }, true);
 
 /* ---------- olhos que seguem o dedo/cursor ---------- */
