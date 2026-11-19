@@ -7,29 +7,103 @@
 const KEY = 'byun.v1';
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MES3 = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+// [chave, nome, cor, rendimento sugerido da conta/caixinha]
+const CDI = (r, info) => ({ rateType: 'cdi', rate: String(r), info });
+const POUP = { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' };
+const CONF = CDI(100, 'Sugestão: em torno de 100% do CDI. Confira no app do banco');
+const NADA = { rateType: 'ano', rate: '0', info: 'Esse saldo normalmente não rende' };
 const BANKS = [
-  // [chave, nome, cor, rendimento sugerido da conta/caixinha]
-  ['nubank', 'Nubank', '#820ad1', { rateType: 'cdi', rate: '100', info: 'Caixinhas do Nubank rendem em torno de 100% do CDI' }],
-  ['mercadopago', 'Mercado Pago', '#00a6e0', { rateType: 'cdi', rate: '100', info: 'Conta remunerada do Mercado Pago rende em torno de 100% do CDI' }],
-  ['inter', 'Inter', '#ff7a00', { rateType: 'cdi', rate: '100', info: 'Porquinho/CDB liquidez diária do Inter, em torno de 100% do CDI' }],
-  ['c6', 'C6 Bank', '#242424', { rateType: 'cdi', rate: '100', info: 'CDB do C6, em torno de 100% do CDI' }],
-  ['picpay', 'PicPay', '#11c76f', { rateType: 'cdi', rate: '102', info: 'Cofrinhos do PicPay, em torno de 102% do CDI' }],
-  ['pagbank', 'PagBank', '#1bb99a', { rateType: 'cdi', rate: '100', info: 'Conta do PagBank, em torno de 100% do CDI' }],
-  ['santander', 'Santander', '#e30613', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
-  ['itau', 'Itaú', '#ec7000', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
-  ['bradesco', 'Bradesco', '#cc092f', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
-  ['bb', 'Banco do Brasil', '#2a5bd7', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
-  ['caixa', 'Caixa', '#005ca9', { rateType: 'ano', rate: '6.17', info: 'Poupança: 0,5% ao mês + TR (cerca de 6,17% ao ano)' }],
-  ['btg', 'BTG Pactual', '#0b2341', { rateType: 'cdi', rate: '100', info: 'CDB liquidez diária, em torno de 100% do CDI' }],
-  ['xp', 'XP', '#111111', { rateType: 'cdi', rate: '100', info: 'CDB liquidez diária, em torno de 100% do CDI' }],
-  ['neon', 'Neon', '#0bb5c4', { rateType: 'cdi', rate: '100', info: 'Em torno de 100% do CDI' }],
-  ['sicoob', 'Sicoob', '#00ae9d', { rateType: 'cdi', rate: '100', info: 'Em torno de 100% do CDI' }],
-  ['sicredi', 'Sicredi', '#3fa110', { rateType: 'cdi', rate: '100', info: 'Em torno de 100% do CDI' }],
+  // bancos digitais e carteiras
+  ['nubank', 'Nubank', '#820ad1', CDI(100, 'Caixinhas do Nubank rendem em torno de 100% do CDI')],
+  ['mercadopago', 'Mercado Pago', '#00a6e0', CDI(100, 'Conta remunerada do Mercado Pago rende em torno de 100% do CDI')],
+  ['picpay', 'PicPay', '#11c76f', CDI(102, 'Cofrinhos do PicPay, em torno de 102% do CDI')],
+  ['inter', 'Inter', '#ff7a00', CDI(100, 'Porquinho/CDB liquidez diária do Inter, em torno de 100% do CDI')],
+  ['c6', 'C6 Bank', '#242424', CDI(100, 'CDB do C6, em torno de 100% do CDI')],
+  ['pagbank', 'PagBank (PagSeguro)', '#1bb99a', CDI(100, 'Conta do PagBank, em torno de 100% do CDI')],
+  ['neon', 'Neon', '#0bb5c4', CONF],
+  ['next', 'Next', '#00e676', CONF],
+  ['iti', 'iti (Itaú)', '#ff6b00', CONF],
+  ['will', 'Will Bank', '#ffd600', CONF],
+  ['pan', 'Banco Pan', '#00aeef', CONF],
+  ['original', 'Banco Original', '#00a651', CONF],
+  ['digio', 'Digio', '#1e2a78', CONF],
+  ['agibank', 'Agibank', '#00b2a9', CONF],
+  ['bmg', 'Banco BMG', '#f47920', CONF],
+  ['bv', 'Banco BV', '#1f4fb5', CONF],
+  ['sofisa', 'Sofisa Direto', '#0052a5', CONF],
+  ['ame', 'Ame Digital', '#e6007e', CONF],
+  ['recargapay', 'RecargaPay', '#00c2a8', CONF],
+  ['99pay', '99Pay', '#ffcc00', CONF],
+  ['meliuz', 'Méliuz', '#ef4d5a', CONF],
+  ['superdigital', 'Superdigital', '#e30613', CONF],
+  ['porto', 'Porto Bank', '#0066b3', CONF],
+  ['carrefour', 'Banco Carrefour', '#1e5bc6', CONF],
+  ['credicard', 'Credicard', '#00a1e4', CONF],
+  ['stone', 'Stone', '#00a868', CONF],
+  ['ton', 'Ton', '#00c868', CONF],
+  ['infinitepay', 'InfinitePay', '#111111', CONF],
+  ['cora', 'Cora', '#fe3e6d', CONF],
+  // bancos tradicionais
+  ['santander', 'Santander', '#e30613', POUP],
+  ['itau', 'Itaú', '#ec7000', POUP],
+  ['bradesco', 'Bradesco', '#cc092f', POUP],
+  ['bb', 'Banco do Brasil', '#2a5bd7', POUP],
+  ['caixa', 'Caixa', '#005ca9', POUP],
+  ['safra', 'Safra', '#0d2240', POUP],
+  ['banrisul', 'Banrisul', '#0070b8', POUP],
+  ['brb', 'BRB', '#00539f', POUP],
+  ['bnb', 'Banco do Nordeste', '#a6192e', POUP],
+  ['banestes', 'Banestes', '#003c7d', POUP],
+  ['banpara', 'Banpará', '#00579c', POUP],
+  ['mercantil', 'Banco Mercantil', '#d71920', POUP],
+  ['daycoval', 'Daycoval', '#003b7a', CONF],
+  // cooperativas
+  ['sicoob', 'Sicoob', '#00ae9d', CONF],
+  ['sicredi', 'Sicredi', '#3fa110', CONF],
+  ['cresol', 'Cresol', '#00a44f', CONF],
+  ['unicred', 'Unicred', '#00573f', CONF],
+  ['ailos', 'Ailos', '#0072bc', CONF],
+  // corretoras e investimentos
+  ['btg', 'BTG Pactual', '#0b2341', CDI(100, 'CDB liquidez diária, em torno de 100% do CDI')],
+  ['xp', 'XP', '#111111', CDI(100, 'CDB liquidez diária, em torno de 100% do CDI')],
+  ['rico', 'Rico', '#ff5a00', CONF],
+  ['clear', 'Clear', '#1a1a1a', CONF],
+  ['nuinvest', 'NuInvest', '#820ad1', CONF],
+  ['genial', 'Genial', '#1f2d5c', CONF],
+  ['toro', 'Toro', '#2b2b6b', CONF],
+  ['modal', 'Modalmais', '#0b4d8b', CONF],
+  // contas internacionais
+  ['nomad', 'Nomad', '#f8c300', { rateType: 'ano', rate: '0', info: 'Conta em dólar: confira no app se tem rendimento' }],
+  ['wise', 'Wise', '#9fe870', { rateType: 'ano', rate: '0', info: 'Conta em outra moeda: confira no app se tem rendimento' }],
+  ['avenue', 'Avenue', '#1c1c1c', { rateType: 'ano', rate: '0', info: 'Conta em dólar: confira no app se tem rendimento' }],
+  // vale-refeição e benefícios
+  ['vr', 'VR', '#00953b', NADA],
+  ['alelo', 'Alelo', '#007a3d', NADA],
+  ['pluxee', 'Pluxee (Sodexo)', '#00a3e0', NADA],
+  ['ticket', 'Ticket', '#e2001a', NADA],
+  ['flash', 'Flash', '#fe2b8f', NADA],
+  ['caju', 'Caju', '#ff5a5f', NADA],
+  ['ifoodbeneficios', 'iFood Benefícios', '#ea1d2c', NADA],
+  ['swile', 'Swile', '#6a3df5', NADA],
+  ['vegas', 'Vegas Card', '#3a3a3a', NADA],
+  // outros
+  ['dinheiro', 'Dinheiro (carteira)', '#3f7d4e', NADA],
   ['outro', 'Outro banco', '#6b6b6b', { rateType: 'cdi', rate: '100', info: 'Sem sugestão: confira no app do banco' }]
 ];
+const BANK_GROUPS = [['Bancos digitais e carteiras', 'nubank'], ['Bancos tradicionais', 'santander'], ['Cooperativas', 'sicoob'], ['Corretoras', 'btg'], ['Contas internacionais', 'nomad'], ['Vale-refeição e benefícios', 'vr'], ['Outros', 'dinheiro']];
+// lista de bancos agrupada (para os selects); com mine=true, os bancos que a pessoa já usa vêm primeiro
+function bankGroups(mine) {
+  const idx = k => BANKS.findIndex(b => b[0] === k);
+  const groups = BANK_GROUPS.map(([label, start], i) => [label, BANKS.slice(idx(start), i + 1 < BANK_GROUPS.length ? idx(BANK_GROUPS[i + 1][1]) : BANKS.length).map(b => [b[0], b[1]])]);
+  if (!mine) return groups;
+  const my = [...new Set(S.accounts.map(a => a.bank).filter(k => k && k !== 'outro'))].map(k => [k, bankOf(k)[1]]);
+  return my.length ? [['Seus bancos', my], ...groups] : groups;
+}
+const bankOptsHTML = (sel, mine = true) => bankGroups(mine).map(([l, o]) => `<optgroup label="${esc(l)}">${o.map(([v, n]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')}</optgroup>`).join('');
+const boxBank = b => b.bank || acc(b.accId)?.bank || '';
 const bankOf = k => BANKS.find(b => b[0] === k) || BANKS[BANKS.length - 1];
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-function guessBank(name) { const n = norm(name).replace(/\s/g, ''); const b = BANKS.find(([k, nm]) => k !== 'outro' && (n.includes(k) || n.includes(norm(nm).replace(/\s/g, '')))); return b ? b[0] : 'outro'; }
+function guessBank(name) { const n = norm(name).replace(/\s/g, ''); const b = BANKS.find(([k, nm]) => k !== 'outro' && ((k.length >= 4 && n.includes(k)) || n.includes(norm(nm).replace(/\s/g, '')))); return b ? b[0] : 'outro'; }
 function sortAccounts() {
   const idx = k => BANKS.findIndex(b => b[0] === k);
   S.accounts.forEach(a => { if (!a.bank) a.bank = guessBank(a.name); });
@@ -147,7 +221,8 @@ function readKey(k) { try { const r = localStorage.getItem(k); return r ? JSON.p
 function migrate(s) {
   if (!s.motion) s.motion = s.follow === false ? 'still' : 'follow';
   (s.accounts || []).forEach(a => { if (!a.bank) a.bank = guessBank(a.name); a.closing = Math.min(31, Math.max(0, +a.closing || 0)); a.due = Math.min(31, Math.max(0, +a.due || 0)); });
-  s.boxes = s.boxes || []; s.moves = s.moves || []; if (!s.cdi) s.cdi = 13.65;
+  s.boxes = s.boxes || []; s.moves = s.moves || [];
+  s.boxes.forEach(b => { if (!b.bank && b.accId) { const a = (s.accounts || []).find(x => x.id === b.accId); if (a) b.bank = a.bank || guessBank(a.name); } }); if (!s.cdi) s.cdi = 13.65;
   return s;
 }
 function load() { const d = defaultState(); const r = readKey(localKey()); return migrate(r ? Object.assign(d, r) : d); }
@@ -745,29 +820,29 @@ function boxCard(N) {
     <div class="saldo-big">${money(BX.total)}</div>
     <div style="font-size:12.5px;margin-top:4px"><b class="pos">+${fmt(BX.est)}</b> <span class="muted">de rendimento estimado em ${monthName(N.m).toLowerCase()}</span></div>
     ${BX.dep || BX.ret || BX.rend ? `<div class="sub" style="margin-top:2px">Este mês: guardou ${fmt(BX.dep)}${BX.ret ? ` · retirou ${fmt(BX.ret)}` : ''}${BX.rend ? ` · rendeu ${fmt(BX.rend)}` : ''}</div>` : ''}
-    <div style="margin-top:10px">${BX.list.map(({ b, bal, est }) => `<div class="row tap" data-a="openBox" data-v="${b.id}"><div class="ico">${esc(b.icon || '🐷')}</div><div class="l"><div class="n">${esc(b.name)}</div><div class="d">${acc(b.accId) ? esc(acc(b.accId).name) + ' · ' : ''}${rateLabel(b)}${est > 0 ? ` · ~${fmt(est)}/mês` : ''}</div>${b.goal > 0 ? `<div class="prog" style="height:5px;margin-top:6px"><i style="width:${Math.min(100, bal / b.goal * 100)}%;background:var(--s7)"></i></div><div class="d" style="margin-top:3px">${pct(bal, b.goal)}% da meta de ${fmt0(b.goal)}</div>` : ''}</div><div class="v">${fmt(bal)}</div></div>`).join('')}</div>
+    <div style="margin-top:10px">${BX.list.map(({ b, bal, est }) => `<div class="row tap" data-a="openBox" data-v="${b.id}"><div class="ico">${esc(b.icon || '🐷')}</div><div class="l"><div class="n">${esc(b.name)}</div><div class="d">${boxBank(b) && boxBank(b) !== 'outro' ? esc(bankOf(boxBank(b))[1]) + ' · ' : ''}${rateLabel(b)}${est > 0 ? ` · ~${fmt(est)}/mês` : ''}</div>${b.goal > 0 ? `<div class="prog" style="height:5px;margin-top:6px"><i style="width:${Math.min(100, bal / b.goal * 100)}%;background:var(--s7)"></i></div><div class="d" style="margin-top:3px">${pct(bal, b.goal)}% da meta de ${fmt0(b.goal)}</div>` : ''}</div><div class="v">${fmt(bal)}</div></div>`).join('')}</div>
     <div class="trio"><button class="btn ghost" data-a="move" data-v="dep">Guardar</button><button class="btn ghost" data-a="move" data-v="ret">Retirar</button><button class="btn ghost" data-a="move" data-v="rend">Rendeu</button></div>
   </section>`;
 }
 function boxForm(b) {
   openForm({
     title: b ? 'Editar caixinha' : 'Nova caixinha', saveLabel: b ? 'Salvar' : 'Criar caixinha',
-    values: b ? { ...b } : (() => { const ac = acc(S.defaultAcc) || S.accounts.find(x => !isCredit(x)); const s = bankOf(ac?.bank)[3]; return { icon: '🐷', rateType: s.rateType, rate: s.rate, accId: ac?.id }; })(),
+    values: b ? { ...b, bank: boxBank(b) } : (() => { const ac = acc(S.defaultAcc) || S.accounts.find(x => !isCredit(x)); const s = bankOf(ac?.bank)[3]; return { icon: '🐷', rateType: s.rateType, rate: s.rate, bank: ac?.bank || '' }; })(),
     fields: [
       { key: 'name', label: 'Nome', req: true, max: 30, ph: 'Ex.: Reserva de emergência, Viagem' },
       { key: 'icon', label: 'Emoji', max: 4, ph: '🐷' },
       ...(b ? [] : [{ key: 'initial', label: 'Quanto já tem guardado nela?', type: 'money', hint: 'Entra como saldo inicial. Não conta como gasto do mês.' }]),
-      { key: 'accId', label: 'Onde está o dinheiro', type: 'select', options: accOpts(), hint: '<span id="bankSug"></span>' },
+      { key: 'bank', label: 'Onde está o dinheiro', type: 'select', banks: 'mine', empty: 'Não sei / não informar', hint: '<span id="bankSug"></span>' },
       { key: 'rateType', label: 'Como rende', type: 'radios', options: [['cdi', '% do CDI'], ['ano', '% ao ano'], ['mes', '% ao mês'], ['nada', 'Não rende']], def: 'cdi' },
       { key: 'rate', label: 'Taxa', ph: 'Ex.: 100', hint: `Para "% do CDI", 100 = rende igual ao CDI (hoje ${String(S.cdi).replace('.', ',')}% ao ano). Estimativa bruta, antes do IR.` },
       { key: 'goal', label: 'Meta (opcional)', type: 'money' }
     ],
-    onOpen: form => { const upd = (apply) => { const ac = acc(form.querySelector('[name=accId]').value); const s = bankOf(ac?.bank)[3]; $('#bankSug').textContent = ac ? `Sugestão para ${bankOf(ac.bank)[1]}: ${s.info}. Confira no app do banco.` : ''; if (apply) { form.querySelectorAll('[name=rateType]').forEach(r => r.checked = r.value === s.rateType); form.querySelector('[name=rate]').value = s.rate.replace('.', ','); } }; upd(false); form._upd = upd; },
-    onChange: (form, k) => { if (k === 'accId') form._upd(true); },
+    onOpen: form => { const upd = (apply) => { const k = form.querySelector('[name=bank]').value; const s = bankOf(k)[3]; $('#bankSug').textContent = k && k !== 'outro' ? `Sugestão para ${bankOf(k)[1]}: ${s.info}.` : ''; if (apply) { form.querySelectorAll('[name=rateType]').forEach(r => r.checked = r.value === s.rateType); form.querySelector('[name=rate]').value = s.rate.replace('.', ','); } }; upd(false); form._upd = upd; },
+    onChange: (form, k) => { if (k === 'bank') form._upd(true); },
     onSave: v => {
       v.rate = String(v.rate || '').replace(',', '.');
-      if (b) { Object.assign(b, v); return; }
-      const nb = { id: uid(), name: v.name, icon: v.icon || '🐷', accId: v.accId, rateType: v.rateType, rate: v.rate, goal: v.goal };
+      if (b) { Object.assign(b, v); delete b.accId; return; }
+      const nb = { id: uid(), name: v.name, icon: v.icon || '🐷', bank: v.bank, rateType: v.rateType, rate: v.rate, goal: v.goal };
       S.boxes = S.boxes || []; S.moves = S.moves || []; S.boxes.push(nb);
       if (v.initial > 0) S.moves.push({ id: uid(), boxId: nb.id, type: 'ini', amount: v.initial, date: todayISO(), note: 'Saldo inicial' });
     },
@@ -802,7 +877,7 @@ function boxBody(b, full) {
   const lab = { ini: 'Saldo inicial', dep: 'Guardou', ret: 'Retirou', rend: 'Rendimento' };
   return `
     <div class="saldo-big">${money(bal)}</div>
-    <div class="sub">${acc(b.accId) ? esc(acc(b.accId).name) + ' · ' : ''}${rateLabel(b)} · rende ~${fmt(est)} por mês</div>
+    <div class="sub">${boxBank(b) && boxBank(b) !== 'outro' ? esc(bankOf(boxBank(b))[1]) + ' · ' : ''}${rateLabel(b)} · rende ~${fmt(est)} por mês</div>
     <div class="trio"><button class="btn ghost" data-a="move" data-v="dep" data-b="${id}">Guardar</button><button class="btn ghost" data-a="move" data-v="ret" data-b="${id}">Retirar</button><button class="btn ghost" data-a="move" data-v="rend" data-b="${id}">Rendeu</button></div>
     <button class="btn ghost" data-a="fixBal" data-v="${id}">Atualizar com o saldo do banco</button>
     <div class="flabel">Histórico</div>
@@ -1161,7 +1236,7 @@ function installView() {
 }
 
 /* ---------- onboarding ---------- */
-function obData() { return ui.obd = ui.obd || { name: S.name || prof?.display_name || '', limit: '984,00', incomes: [{ name: 'Salário', amount: '', rule: 'util5', day: '5' }], saved: '', savedAcc: S.defaultAcc, savedRate: '100' }; }
+function obData() { return ui.obd = ui.obd || { name: S.name || prof?.display_name || '', limit: '984,00', incomes: [{ name: 'Salário', amount: '', rule: 'util5', day: '5' }], saved: '', savedBank: acc(S.defaultAcc)?.bank || 'nubank', savedRate: '100' }; }
 function onboarding() {
   const dots = `<div class="dots">${[0, 1, 2].map(i => `<i class="${ui.ob === i ? 'on' : ''}"></i>`).join('')}</div>`;
   if (ui.ob === 0) return `<div class="ob"><div class="logo">${byunSVG('happy')}</div><div class="wordmark">byun</div>
@@ -1187,7 +1262,7 @@ function onboarding() {
       <button type="button" class="btn ghost" data-a="obAddIncome">${ic('plus')} Outra renda</button>
       <div class="flabel" style="margin-top:22px">Dinheiro guardado</div>
       <label class="fld" style="margin-top:0"><span>Quanto você já tem guardado?</span><input data-ob="saved" inputmode="decimal" value="${esc(d.saved)}" placeholder="0,00"><span class="hint">Vira sua primeira caixinha no cofrinho. Pode deixar vazio.</span></label>
-      <div class="duo"><label class="fld"><span>Onde está</span><select data-ob="savedAcc">${S.accounts.map(a => `<option value="${a.id}" ${d.savedAcc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
+      <div class="duo"><label class="fld"><span>Onde está</span><select data-ob="savedBank">${bankOptsHTML(d.savedBank || '')}</select></label>
       <label class="fld"><span>Rende (% do CDI)</span><input data-ob="savedRate" inputmode="decimal" value="${esc(d.savedRate)}" placeholder="100"></label></div>
       ${dots}<button class="btn" type="submit">Continuar</button></form></div>`;
   }
@@ -1327,6 +1402,7 @@ function openForm({ title, fields, values = {}, onSave, onDelete, saveLabel = 'S
     if (f.type === 'colors') return `<div class="fld"><span>${f.label}</span><div class="swatches">${[...new Set([...(f.options), v].filter(Boolean))].map(c => `<label><input type="radio" name="${f.key}" value="${c}" ${v === c ? 'checked' : ''}><span style="background:${c}"></span></label>`).join('')}<label class="custom-c" title="Outra cor"><input type="color" name="${f.key}_custom" value="${v || '#1f5a3a'}"></label></div>${hint}</div>`;
     if (f.type === 'toggle') return `<label class="switch fld ${f.disabled ? 'off' : ''}"><div><div class="n">${f.label}</div>${f.hint ? `<div class="d">${f.hint}</div>` : ''}</div><span class="tgl"><input type="checkbox" name="${f.key}" ${v ? 'checked' : ''} ${f.disabled ? 'disabled' : ''}><i></i></span></label>`;
     if (f.type === 'html') return f.html;
+    if (f.type === 'select' && f.banks) return `<label class="fld"><span>${f.label}</span><select name="${f.key}">${f.empty ? `<option value="">${f.empty}</option>` : ''}${bankOptsHTML(String(v || ''), f.banks === 'mine')}</select>${hint}</label>`;
     if (f.type === 'select') return `<label class="fld"><span>${f.label}</span><select name="${f.key}">${f.options.map(([ov, ol]) => `<option value="${ov}" ${String(v) === String(ov) ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>${hint}</label>`;
     if (f.type === 'money') return `<label class="fld"><span>${f.label}</span><input name="${f.key}" inputmode="decimal" placeholder="0,00" value="${moneyInput(v)}">${hint}</label>`;
     if (f.type === 'date') return `<label class="fld"><span>${f.label}</span><input name="${f.key}" type="date" value="${esc(v)}">${hint}</label>`;
@@ -1460,7 +1536,7 @@ function accForm(a, type = 'conta') {
   openForm({
     title: a ? 'Editar conta' : 'Nova conta ou cartão', values: start,
     fields: [
-      { key: 'bank', label: 'Banco', type: 'select', options: BANKS.map(b => [b[0], b[1]]) },
+      { key: 'bank', label: 'Banco', type: 'select', banks: 'all' },
       { key: 'type', label: 'Tipo', type: 'radios', options: [['conta', 'Conta / débito / pix'], ['credito', 'Cartão de crédito']], def: type },
       { key: 'name', label: 'Nome', req: true, max: 30, ph: 'Ex.: Cartão Santander' },
       { key: 'color', label: 'Cor', type: 'colors', options: [...new Set(BANKS.map(b => b[2]))].slice(0, 9) },
@@ -1752,7 +1828,7 @@ document.addEventListener('submit', e => {
   let acc_ = 0; base.forEach((c, i) => { c.limit = i === base.length - 1 ? Math.round((L - acc_) * 100) / 100 : Math.round(c.limit / tot * L); acc_ += c.limit; });
   d.incomes.forEach(r => { const v = parseMoney(r.amount); if (v > 0) S.fixed.push({ id: uid(), kind: 'entra', name: (r.name || 'Renda').trim(), amount: v, rule: r.rule, day: Math.min(31, Math.max(1, parseInt(r.day) || 5)), sat: true, accId: S.defaultAcc, since: curKey() }); });
   const sv = parseMoney(d.saved);
-  if (sv > 0) { const nb = { id: uid(), name: 'Reserva', icon: '🐷', accId: d.savedAcc, rateType: 'cdi', rate: String(d.savedRate || '100').replace(',', '.') }; S.boxes = [nb]; S.moves = [{ id: uid(), boxId: nb.id, type: 'ini', amount: sv, date: todayISO(), note: 'Saldo inicial' }]; }
+  if (sv > 0) { const nb = { id: uid(), name: 'Reserva', icon: '🐷', bank: d.savedBank, rateType: 'cdi', rate: String(d.savedRate || '100').replace(',', '.') }; S.boxes = [nb]; S.moves = [{ id: uid(), boxId: nb.id, type: 'ini', amount: sv, date: todayISO(), note: 'Saldo inicial' }]; }
   ui.obd = null; save(); ui.ob = 2; render();
 });
 document.addEventListener('input', e => {
