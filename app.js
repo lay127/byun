@@ -228,7 +228,20 @@ function migrate(s) {
 function load() { const d = defaultState(); const r = readKey(localKey()); return migrate(r ? Object.assign(d, r) : d); }
 let S = CLOUD ? defaultState() : load();
 function writeLocal() { try { localStorage.setItem(localKey(), JSON.stringify(S)); } catch (e) { toast('Não consegui salvar neste navegador'); } }
+// gastos pagos com dinheiro de uma caixinha viram uma retirada automática nela
+function syncBoxMoves() {
+  if (!S.moves) return;
+  const want = new Map(S.tx.filter(t => t.type === 'gasto' && t.boxId && box(t.boxId)).map(t => [t.id, t]));
+  S.moves = S.moves.filter(m => !m.txId || want.has(m.txId));
+  want.forEach(t => {
+    const nt = 'Pagou ' + (t.note || cat(t.catId)?.name || 'um gasto');
+    const m = S.moves.find(x => x.txId === t.id);
+    if (m) Object.assign(m, { boxId: t.boxId, amount: t.amount, date: t.date, note: nt });
+    else S.moves.push({ id: uid(), boxId: t.boxId, type: 'ret', amount: t.amount, date: t.date, note: nt, txId: t.id });
+  });
+}
 function save() {
+  syncBoxMoves();
   S._savedAt = Date.now(); writeLocal();
   if (CLOUD && user) { sync.dirty = true; setSync('saving'); clearTimeout(sync.timer); sync.timer = setTimeout(push, 1200); }
 }
@@ -352,7 +365,7 @@ function monthlyRate(b) {
 const rateLabel = b => b.rateType === 'cdi' ? `${b.rate || 100}% do CDI` : b.rateType === 'ano' ? `${b.rate}% ao ano` : b.rateType === 'mes' ? `${b.rate}% ao mês` : 'não rende';
 function boxesInfo(m = ui.month) {
   const end = `${m}-31`, before = `${addMonths(m, -1)}-31`;
-  const mv = (S.moves || []).filter(x => x.date.slice(0, 7) === m);
+  const mv = (S.moves || []).filter(x => x.date.slice(0, 7) === m && !x.txId);   // retirada que pagou um gasto já fica fora do mês dos dois lados
   const dep = sum(mv.filter(x => x.type === 'dep')), ret = sum(mv.filter(x => x.type === 'ret')), rend = sum(mv.filter(x => x.type === 'rend'));
   const list = (S.boxes || []).map(b => ({ b, bal: boxBal(b, end), est: Math.max(0, boxBal(b, before) || boxBal(b, end)) * monthlyRate(b) }));
   return { list, total: sum(list, x => x.bal), est: sum(list, x => x.est), dep, ret, rend };
@@ -384,7 +397,7 @@ function cardFree(a) {
 
 function info(m = ui.month) {
   const tx = S.tx.filter(t => t.date.slice(0, 7) === m);   // transações seguem a data da compra; só a fatura segue o ciclo do cartão
-  const gastos = tx.filter(t => t.type === 'gasto' && !t.fixedId && !onBenef(t)), receitas = tx.filter(t => t.type === 'receita' && !onBenef(t));   // o vale tem saldo próprio: fica fora do Pode gastar   // contas fixas lançadas não entram no dia a dia
+  const gastos = tx.filter(t => t.type === 'gasto' && !t.fixedId && !onBenef(t) && !t.boxId), receitas = tx.filter(t => t.type === 'receita' && !onBenef(t));   // o vale tem saldo próprio: fica fora do Pode gastar   // contas fixas lançadas não entram no dia a dia
   const gasto = sum(gastos), receita = sum(receitas);
   const limit = sum(S.categories, c => c.limit);
   const fixIn = sum(S.fixed.filter(f => f.kind === 'entra' && (!f.since || f.since <= m)));
@@ -1027,7 +1040,7 @@ function receive(t, on) {
 function txRow(t) {
   const c = cat(t.catId), a = acc(t.accId), r = t.type === 'receita';
   const title = t.note || (r ? 'Receita' : c?.name || 'Gasto');
-  const sub = [t.fixedId ? 'conta fixa' : '', r ? (t.note ? 'Receita' : '') : (t.note ? c?.name : ''), a?.name, t.inst ? `parcela ${t.inst}` : ''].filter(Boolean).join(' · ');
+  const sub = [t.fixedId ? 'conta fixa' : '', r ? (t.note ? 'Receita' : '') : (t.note ? c?.name : ''), a?.name || (t.boxId && box(t.boxId) ? '🐷 ' + esc(box(t.boxId).name) : ''), t.inst ? `parcela ${t.inst}` : ''].filter(Boolean).join(' · ');
   const op = partsSum(t.owedBy?.parts);
   const owe = t.owedBy && t.owedBy.name ? `<div class="owe ${t.owedBy.received ? 'ok' : ''}">${t.owedBy.received ? '✓ ' + esc(t.owedBy.name) + ' pagou' : esc(t.owedBy.name) + ' te deve ' + fmt(oweLeft(t)) + (op ? ` (já pagou ${fmt(op)})` : '')}</div>` : '';
   const shortD = iso => iso ? iso.slice(8) + '/' + iso.slice(5, 7) : '';
@@ -1332,7 +1345,7 @@ const sheetHead = t => `<div class="sheet-h"><h3>${t}</h3><button class="icon-bt
 function openAdd(type = 'gasto', t = null) {
   const def = S.accounts.find(a => a.id === S.defaultAcc) ? S.defaultAcc : S.accounts[0]?.id;
   const grp = t && t.group ? S.tx.filter(x => x.group === t.group).sort((a, b) => a.date.localeCompare(b.date)) : null;
-  draft = t ? { type: t.type, cents: Math.round((grp ? sum(grp) : t.amount) * 100), catId: t.catId, accId: t.accId, note: t.note || '', date: grp ? grp[0].date : t.date, parcelas: grp ? grp.length : 1, groupId: t.group || null, more: true, step: 2, editId: t.id, paid: isPaid(t), paidAt: t.paidAt || '', owe: t.owedBy ? { on: true, name: t.owedBy.name, amount: moneyInput(t.owedBy.amount), received: !!t.owedBy.received } : { on: false, name: '', amount: '' } }
+  draft = t ? { type: t.type, cents: Math.round((grp ? sum(grp) : t.amount) * 100), catId: t.catId, accId: t.accId, boxId: t.boxId || null, note: t.note || '', date: grp ? grp[0].date : t.date, parcelas: grp ? grp.length : 1, groupId: t.group || null, more: true, step: 2, editId: t.id, paid: isPaid(t), paidAt: t.paidAt || '', owe: t.owedBy ? { on: true, name: t.owedBy.name, amount: moneyInput(t.owedBy.amount), received: !!t.owedBy.received } : { on: false, name: '', amount: '' } }
     : { type, cents: 0, catId: null, accId: def, note: '', date: ui.month === curKey() ? todayISO() : ui.month + '-01', parcelas: 1, more: false, step: 1, editId: null, paid: null, owe: { on: false, name: '', amount: '' } };
   openSheet('<div id="add"></div>'); renderAdd();
 }
@@ -1350,7 +1363,9 @@ function renderAdd() {
     if (c) { const used = (N.byCat.find(x => x.c.id === c.id)?.v || 0) - (editing && editing.catId === c.id ? editing.amount : 0); const rest = c.limit - used - v; sub = c.limit > 0 ? (rest >= 0 ? `${esc(c.name)}: sobram <b>${fmt(rest)}</b> de ${fmt0(c.limit)}` : `${esc(c.name)}: passa <b class="neg">${fmt(-rest)}</b> do limite de ${fmt0(c.limit)}`) : `${esc(c.name)}: sem limite definido`; }
     else sub = `Pode gastar no mês: <b>${fmt(N.pode + (editing ? editing.amount : 0) - v)}</b>`;
     const va = acc(d.accId);
-    if (isBenef(va)) { const av = r2(benefBal(va) + (editing && editing.accId === va.id && (editing.at || 0) > (va.balAt || 0) ? editing.amount : 0)); sub = av - v >= 0 ? `Saldo do ${esc(va.name)}: sobram <b>${fmt(av - v)}</b>` : `Saldo do ${esc(va.name)}: <b class="neg">não dá</b>, só tem ${fmt(av)}`; }
+    const bx = d.type === 'gasto' && d.boxId ? box(d.boxId) : null;
+    if (bx) { const av = r2(boxBal(bx) + (editing && editing.boxId === bx.id ? editing.amount : 0)); sub = av - v >= 0 ? `Sai da caixinha ${esc(bx.name)}: ficam <b>${fmt(av - v)}</b>` : `Caixinha ${esc(bx.name)}: <b class="neg">não dá</b>, só tem ${fmt(av)}`; }
+    else if (isBenef(va)) { const av = r2(benefBal(va) + (editing && editing.accId === va.id && (editing.at || 0) > (va.balAt || 0) ? editing.amount : 0)); sub = av - v >= 0 ? `Saldo do ${esc(va.name)}: sobram <b>${fmt(av - v)}</b>` : `Saldo do ${esc(va.name)}: <b class="neg">não dá</b>, só tem ${fmt(av)}`; }
   } else sub = 'Dinheiro que entrou na conta';
   const amt = brl.format(v || 0).replace(/\u00a0/g, ' ');   // o valor digitado aparece mesmo com os valores escondidos
   const tabs = `<div class="seg"><button class="${d.type === 'gasto' ? 'on' : ''}" data-a="dType" data-v="gasto">Gasto</button><button class="${d.type === 'receita' ? 'on' : ''}" data-a="dType" data-v="receita">Receita</button></div>`;
@@ -1368,11 +1383,12 @@ function renderAdd() {
   }
   const a = acc(d.accId);
   $('#add').innerHTML = head + tabs + `<div class="amount" data-a="dBack" style="cursor:pointer">${amt}<span class="edit-amt">${ic('pencil')}</span></div><div class="amount-sub">${sub}</div>${cats}
-    <div class="flabel">Conta</div><div class="chips">${S.accounts.map(x => `<button class="chip ${d.accId === x.id ? 'on' : ''}" data-a="dAcc" data-v="${x.id}"><span class="dot" style="background:${x.color}"></span>${esc(x.name)}${isBenef(x) ? ` <small class="muted">${fmt(benefBal(x))}</small>` : ''}</button>`).join('')}</div>
+    <div class="flabel">Conta</div><div class="chips">${S.accounts.map(x => `<button class="chip ${!d.boxId && d.accId === x.id ? 'on' : ''}" data-a="dAcc" data-v="${x.id}"><span class="dot" style="background:${x.color}"></span>${esc(x.name)}${isBenef(x) ? ` <small class="muted">${fmt(benefBal(x))}</small>` : ''}</button>`).join('')}</div>
+    ${d.type === 'gasto' && (S.boxes || []).length ? `<div class="flabel">Ou tirar do cofrinho</div><div class="chips">${S.boxes.map(b => `<button class="chip ${d.boxId === b.id ? 'on' : ''}" data-a="dBox" data-v="${b.id}">${esc(b.icon || '🐷')} ${esc(b.name)} <small class="muted">${fmt(boxBal(b))}</small></button>`).join('')}</div>` : ''}
     <div class="details ${d.more ? 'open' : ''}"><button data-a="dMore">Data, nota e mais ${ic('down')}</button>
       ${d.more ? `<label class="fld"><span>Nota</span><input id="dNote" value="${esc(d.note)}" placeholder="Ex.: Uber pro metrô" maxlength="60"></label>
       <label class="fld"><span>Data</span><input id="dDate" type="date" value="${d.date}"></label>
-      ${d.type === 'gasto' ? `<label class="switch"><div><div class="n">Já pago</div><div class="d">${fx ? 'Também marca em Contas a pagar' : isCredit(a) ? 'No cartão, fica pago quando a fatura é paga' : 'Débito e pix já saem pagos'}</div></div><span class="tgl"><input type="checkbox" id="dPaid" ${(d.paid ?? !isCredit(a)) ? 'checked' : ''}><i></i></span></label>
+      ${d.type === 'gasto' && !d.boxId ? `<label class="switch"><div><div class="n">Já pago</div><div class="d">${fx ? 'Também marca em Contas a pagar' : isCredit(a) ? 'No cartão, fica pago quando a fatura é paga' : 'Débito e pix já saem pagos'}</div></div><span class="tgl"><input type="checkbox" id="dPaid" ${(d.paid ?? !isCredit(a)) ? 'checked' : ''}><i></i></span></label>
       ${d.paid ? `<label class="fld" style="margin-top:4px"><span>Pago em</span><input id="dPaidAt" type="date" value="${d.paidAt || todayISO()}"></label>` : ''}
       <label class="switch"><div><div class="n">Alguém me deve isso</div><div class="d">Ex.: dividiu a conta, pagou por alguém</div></div><span class="tgl"><input type="checkbox" id="dOweOn" ${d.owe?.on ? 'checked' : ''}><i></i></span></label>
       ${d.owe?.on ? `<div class="duo"><label class="fld" style="margin-top:0"><span>Quem</span><input id="dOweName" value="${esc(d.owe.name)}" placeholder="Nome" maxlength="30" list="peopleList"></label><label class="fld" style="margin-top:0"><span>Quanto</span><input id="dOweAmt" inputmode="decimal" value="${esc(d.owe.amount)}" placeholder="${moneyInput(v) || '0,00'}"></label></div>
@@ -1405,12 +1421,20 @@ function saveDraft() {
   const amount = d.cents / 100;
   if (d.owe?.on && !d.owe.name.trim()) { toast('Coloque o nome de quem te deve'); return; }
   const extra = t => {
-    if (t.type !== 'gasto') { delete t.paid; delete t.owedBy; return t; }
+    if (t.type !== 'gasto') { delete t.paid; delete t.owedBy; delete t.boxId; return t; }
+    if (d.boxId) { t.boxId = d.boxId; t.accId = null; t.paid = true; t.paidAt = t.paidAt || t.date; return t.owedBy && !d.owe?.on ? (delete t.owedBy, t) : (d.owe?.on ? (t.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || 0, received: !!d.owe.received }, t) : t); }
+    delete t.boxId;
     if (d.paid !== null && d.paid !== undefined) { t.paid = d.paid; if (d.paid) t.paidAt = d.paidAt || t.paidAt || todayISO(); else delete t.paidAt; }
     if (d.owe?.on) t.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || 0, received: !!d.owe.received }; else delete t.owedBy;
     return t;
   };
-  const credit = d.type === 'gasto' && isCredit(acc(d.accId));
+  if (d.type !== 'gasto') d.boxId = null;
+  if (d.boxId) {
+    const bx = box(d.boxId), old = d.editId ? S.tx.find(x => x.id === d.editId) : null;
+    const avail = r2(boxBal(bx) + (old && old.boxId === bx.id ? old.amount : 0));
+    if (amount > avail) { toast(avail > 0 ? `A caixinha ${bx.name} só tem ${fmt(avail)}` : `A caixinha ${bx.name} está vazia`); return; }
+  }
+  const credit = d.type === 'gasto' && !d.boxId && isCredit(acc(d.accId));
   if (!credit) d.parcelas = 1;
   const va = acc(d.accId);
   if (d.type === 'gasto' && isBenef(va)) {
@@ -1790,7 +1814,8 @@ document.addEventListener('click', e => {
     case 'close': closeSheet(); break;
     case 'dType': draft.type = v; renderAdd(); break;
     case 'dCat': draft.catId = draft.catId === v ? null : v; renderAdd(); break;
-    case 'dAcc': draft.accId = v; renderAdd(); break;
+    case 'dAcc': draft.accId = v; draft.boxId = null; renderAdd(); break;
+    case 'dBox': draft.boxId = draft.boxId === v ? null : v; renderAdd(); break;
     case 'dKey': if (v === '⌫') draft.cents = Math.floor(draft.cents / 10); else if (draft.cents < 1e9) draft.cents = draft.cents * (v === '00' ? 100 : 10) + (v === '00' ? 0 : +v); renderAdd(); break;
     case 'dQuick': draft.cents += +v * 100; renderAdd(); break;
     case 'dNext': draft.step = 2; renderAdd(); break;
