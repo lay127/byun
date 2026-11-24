@@ -1214,6 +1214,8 @@ ui.msgI = Math.floor(Math.random() * 12);
 // ao abrir: o Byun dá oi e depois volta pras falas normais; de tempos em tempos ele fala sozinho
 setTimeout(() => { ui.greet = false; const b = $('.bubble'); if (b && ui.view === 'home') { const n = info(); b.textContent = fala(n, mood(n)); b.style.animation = 'none'; b.offsetHeight; b.style.animation = ''; } const w = $('.byun-wrap'); if (w) w.classList.remove('hello'); }, 5000);
 setInterval(() => { if (document.hidden || ui.view !== 'home' || ui.greet || $('.sheet')) return; const b = $('.bubble'); if (!b) return; ui.msgI++; const n = info(); b.textContent = fala(n, mood(n)); b.style.animation = 'none'; b.offsetHeight; b.style.animation = ''; const w = $('.byun-wrap'); if (w) { w.classList.remove('boop'); w.offsetWidth; w.classList.add('boop'); } }, 25000);
+// rodinha do mouse anda para o lado nas fileiras de filtros
+document.addEventListener('wheel', e => { const c = e.target.closest && e.target.closest('.chips, .cards-scroll'); if (!c || Math.abs(e.deltaX) > Math.abs(e.deltaY) || c.scrollWidth <= c.clientWidth) return; const before = c.scrollLeft; c.scrollLeft += e.deltaY; if (c.scrollLeft !== before) e.preventDefault(); }, { passive: false });
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawCharts, 150); });
 
 /* ---------- Planejar ---------- */
