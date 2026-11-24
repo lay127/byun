@@ -222,6 +222,8 @@ function migrate(s) {
   if (!s.motion) s.motion = s.follow === false ? 'still' : 'follow';
   (s.accounts || []).forEach(a => { if (!a.bank) a.bank = guessBank(a.name); a.closing = Math.min(31, Math.max(0, +a.closing || 0)); a.due = Math.min(31, Math.max(0, +a.due || 0)); });
   s.boxes = s.boxes || []; s.moves = s.moves || [];
+  // conserta "alguém me deve" que perdeu os pagamentos ao salvar: refaz as partes a partir das receitas que voltaram
+  (s.tx || []).forEach(t => { const o = t.owedBy; if (!o) return; const rs = s.tx.filter(r => r.fromOwe === t.id); const have = new Set((o.parts || []).map(p => p.txId)); const miss = rs.filter(r => !have.has(r.id) && r.id !== o.recvTx); if (miss.length) { o.parts = [...(o.parts || []), ...miss.map(r => ({ id: r.id, amount: r.amount, date: r.date, txId: r.id }))]; const tot = +o.amount || t.amount; if (o.parts.reduce((a, p) => a + p.amount, 0) >= tot - 0.004) o.received = true; } });
   s.boxes.forEach(b => { if (!b.bank && b.accId) { const a = (s.accounts || []).find(x => x.id === b.accId); if (a) b.bank = a.bank || guessBank(a.name); } }); if (!s.cdi) s.cdi = 13.65;
   return s;
 }
@@ -1418,16 +1420,31 @@ function partsBlock(d) {
   }
   return h;
 }
+// mantém o que a pessoa já pagou (partes) ao salvar de novo o "alguém me deve"
+function keepOwe(t, d, defAmount) {
+  const prev = t.owedBy || {};
+  const o = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || defAmount || 0, received: !!d.owe.received };
+  if ((prev.parts || []).length) o.parts = prev.parts;
+  if (prev.recvTx) o.recvTx = prev.recvTx;
+  t.owedBy = o; if (oweLeft(t) <= 0 && (o.parts || []).length) o.received = true;
+  return t;
+}
 function saveDraft() {
   const d = draft; if (!d || !d.cents) return;
   const amount = d.cents / 100;
+  // se digitou um valor em "Pagar" ou "Recebi" e apertou Salvar direto, registra também
+  const cur = d.editId ? S.tx.find(x => x.id === d.editId) : null;
+  if (cur) {
+    const pa = $('#dPartAmt') && parseMoney($('#dPartAmt').value); if (pa) { payPart(cur, pa, $('#dPartDate').value || todayISO()); d.paid = isPaid(cur); }
+    const ra = $('#dRecvAmt') && parseMoney($('#dRecvAmt').value); if (ra && cur.owedBy) { receivePart(cur, ra, $('#dRecvDate').value || todayISO()); d.owe.received = !!cur.owedBy.received; }
+  }
   if (d.owe?.on && !d.owe.name.trim()) { toast('Coloque o nome de quem te deve'); return; }
   const extra = t => {
     if (t.type !== 'gasto') { delete t.paid; delete t.owedBy; delete t.boxId; return t; }
-    if (d.boxId) { t.boxId = d.boxId; t.accId = null; t.paid = true; t.paidAt = t.paidAt || t.date; return t.owedBy && !d.owe?.on ? (delete t.owedBy, t) : (d.owe?.on ? (t.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || 0, received: !!d.owe.received }, t) : t); }
+    if (d.boxId) { t.boxId = d.boxId; t.accId = null; t.paid = true; t.paidAt = t.paidAt || t.date; return t.owedBy && !d.owe?.on ? (delete t.owedBy, t) : (d.owe?.on ? keepOwe(t, d, 0) : t); }
     delete t.boxId;
     if (d.paid !== null && d.paid !== undefined) { t.paid = d.paid; if (d.paid) t.paidAt = d.paidAt || t.paidAt || todayISO(); else delete t.paidAt; }
-    if (d.owe?.on) t.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || 0, received: !!d.owe.received }; else delete t.owedBy;
+    if (d.owe?.on) keepOwe(t, d, 0); else delete t.owedBy;
     return t;
   };
   if (d.type !== 'gasto') d.boxId = null;
@@ -1455,6 +1472,7 @@ function saveDraft() {
     S.tx.push(extra({ id: d.editId, type: d.type, amount, catId: d.catId, accId: d.accId, note: d.note.trim(), date: d.date, at: old?.at || Date.now() }));
     toast('Agora é uma compra de uma vez');
   } else if (d.parcelas > 1) {
+    const prevOwe = d.editId ? S.tx.find(x => x.id === d.editId)?.owedBy : null;
     if (d.editId) S.tx = S.tx.filter(x => d.groupId ? x.group !== d.groupId : x.id !== d.editId);   // refaz as parcelas
     const g = uid(), each = Math.round(amount / d.parcelas * 100) / 100;
     for (let i = 0; i < d.parcelas; i++) {
@@ -1462,7 +1480,7 @@ function saveDraft() {
       const day = Math.min(dd, dim(k));
       const tx = { id: uid(), type: 'gasto', amount: i === d.parcelas - 1 ? Math.round((amount - each * (d.parcelas - 1)) * 100) / 100 : each, catId: d.catId, accId: d.accId, note: d.note.trim(), date: `${k}-${pad(day)}`, group: g, inst: `${i + 1}/${d.parcelas}`, at: Date.now() };
       if (d.paid !== null && d.paid !== undefined) tx.paid = d.paid;
-      if (i === 0 && d.owe?.on) tx.owedBy = { name: d.owe.name.trim(), amount: parseMoney(d.owe.amount) || amount, received: false };
+      if (i === 0 && d.owe?.on) { if (prevOwe) tx.owedBy = prevOwe; keepOwe(tx, d, amount); }
       S.tx.push(tx);
     }
     toast(d.editId ? `Refeito em ${d.parcelas}x` : `${d.parcelas}x lançado`);
